@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import UserTable from '../components/UserTable';
 
 
 /**
@@ -16,6 +17,7 @@ export default function Home() {
       </header>
       <main className="flex-grow flex flex-col items-center justify-center">
         <h1 className="text-3xl font-bold text-black">Remilia Social Credit System</h1>
+        <UserTable />
       </main>
     </div>
   );
