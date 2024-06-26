@@ -16,7 +16,7 @@ const { chains, publicClient } = configureChains(
 
 const { connectors } = getDefaultWallets({
   appName: 'RSCS',
-  projectId: 'YOUR_PROJECT_ID', // We need to replace the WalletConnect Cloud Project ID here @ToDo
+  projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID!,
   chains
 });
 
