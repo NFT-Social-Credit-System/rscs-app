@@ -29,7 +29,7 @@ export async function checkVotingEligibility(address: string): Promise<number> {
   for (const collection of collections) {
     const contract = new ethers.Contract(collection.address, balanceABI, provider);
     const balance = await contract.balanceOf(address);
-    if (balance.gt(0)) {
+    if (ethers.getBigInt(balance) > ethers.getBigInt(0)) {
       highestWeight = Math.max(highestWeight, collection.weight);
     }
   }

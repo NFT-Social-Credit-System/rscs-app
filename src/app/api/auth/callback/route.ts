@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TwitterApi } from 'twitter-api-v2';
-import connectDB from '@rscs-backend/backend/db';
-import User from '@rscs-backend/backend/models/TwitterUserData';
+import connectToDatabase from '@/utils/mongodb';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -34,35 +33,31 @@ export async function GET(request: NextRequest) {
 
     const { data: userObject } = await loggedClient.v2.me();
 
-    // Connect to the database
-    await connectDB(); // Connect to the database
+    const { db } = await connectToDatabase();
+    const usersCollection = db.collection('users');
 
-    // Check if the user exists in the database
-    const user = await User.findOne({ username: userObject.username });
+    const user = await usersCollection.findOne({ username: userObject.username });
 
     if (!user) {
       return NextResponse.redirect(new URL('/?error=Please submit your username first!', request.url));
     }
 
-    // Simulate checking if the user has already claimed the account
-    const alreadyClaimed = false; // Replace with actual logic
+    const alreadyClaimed = user.isClaimed;
 
     if (alreadyClaimed) {
       return NextResponse.redirect(new URL('/?error=You have already claimed your account!', request.url));
     }
 
-    // Simulate claiming the account
-    const success = true; // Replace with actual logic
+    await usersCollection.updateOne(
+      { username: userObject.username },
+      { $set: { isClaimed: true } }
+    );
 
-    if (success) {
-      const response = NextResponse.redirect(new URL('/?auth=success', request.url));
-      response.cookies.delete('codeVerifier');
-      response.cookies.delete('state');
-      response.cookies.delete('userId');
-      return response;
-    } else {
-      return NextResponse.redirect(new URL('/?error=Failed to claim account', request.url));
-    }
+    const response = NextResponse.redirect(new URL('/?auth=success', request.url));
+    response.cookies.delete('codeVerifier');
+    response.cookies.delete('state');
+    response.cookies.delete('userId');
+    return response;
   } catch (error) {
     console.error('Error in callback:', error);
     return NextResponse.json({ error: 'Authentication failed' }, { status: 500 });

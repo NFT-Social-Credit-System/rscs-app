@@ -1,30 +1,34 @@
-import mongoose from 'mongoose';
+import { MongoClient, Db } from 'mongodb';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
+  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
 
-interface DatabaseConnection {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
+interface MongoDBCache {
+  conn: MongoClient | null;
+  promise: Promise<MongoClient> | null;
 }
 
-let cached: DatabaseConnection = (global as any).mongoose;
+declare global {
+  var mongodb: MongoDBCache;
+}
+
+let cached = global.mongodb;
 
 if (!cached) {
-  cached = (global as any).mongoose = { conn: null, promise: null };
+  cached = global.mongodb = { conn: null, promise: null };
 }
 
-export async function connectToDatabase(): Promise<{ db: mongoose.Connection }> {
+async function connectToDatabase(): Promise<{ client: MongoClient, db: Db }> {
   if (cached.conn) {
-    return { db: cached.conn.connection };
+    return { client: cached.conn, db: cached.conn.db('RSCS') };
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI as string).then((mongoose) => {
-      return mongoose;
+    cached.promise = MongoClient.connect(MONGODB_URI as string).then((client) => {
+      return client;
     });
   }
 
@@ -35,5 +39,7 @@ export async function connectToDatabase(): Promise<{ db: mongoose.Connection }> 
     throw e;
   }
 
-  return { db: cached.conn.connection };
+  return { client: cached.conn, db: cached.conn.db('RSCS') };
 }
+
+export default connectToDatabase;
