@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect } from "react";
 import {
   Table,
@@ -24,6 +26,9 @@ import UserStatusBadge from "./UserStatusBadge";
 import { CheckBadgeIcon } from '@heroicons/react/24/solid';
 import TwitterAuthModal from './TwitterAuthModal';
 import { useSearchParams } from 'next/navigation';
+import { useAccount } from 'wagmi';
+import { checkVotingEligibility } from '../lib/checkBalance';
+import useSWR from 'swr';
 
 // Define UserData interface here instead of importing from InitialUserData
 interface UserData {
@@ -44,8 +49,11 @@ interface UserData {
 }
 
 // Utility functions
-const formatFollowers = (followers: number) => {
-  if (followers >= 10000) {
+const formatFollowers = (followers: number | undefined | null) => {
+  if (followers === undefined || followers === null) {
+    return "N/A";
+  }
+  if (followers >= 1000) {
     return (followers / 1000).toFixed(1) + "K";
   }
   return followers.toLocaleString();
@@ -69,8 +77,11 @@ const isGoldCheckmarkEligible = (user: UserData) => {
   return approvalRate > 90 && totalVotes > 100;
 };
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+const itemsPerPage = 10;
+
 const UserTable: React.FC = () => {
-  const [users, setUsers] = useState<UserData[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState("approvalRateDesc");
@@ -82,48 +93,36 @@ const UserTable: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dataLoaded, setDataLoaded] = useState(false);
-
-  const itemsPerPage = 10;
-
+  const [votingWeight, setVotingWeight] = useState<number>(0);
+  const { address } = useAccount();
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
-  const error = searchParams.get('error');
+  const authError = searchParams.get('error');
+  const { data: users, error: fetchError, isLoading, mutate } = useSWR<UserData[]>('/api/fetch', fetcher);
 
   // Handle auth and error messages
   useEffect(() => {
     if (auth === 'success') {
       setSuccessMessage('Account successfully claimed!');
-    } else if (error) {
-      setErrorMessage(error);
+    } else if (authError) {
+      setErrorMessage(authError);
     }
-  }, [auth, error]);
+  }, [auth, authError]);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  // Fetch users from the API
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/users');
-      const data = await response.json();
-      setUsers(data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    } finally {
-      setIsLoading(false);
+    if (address) {
+      checkVotingEligibility(address).then(setVotingWeight);
     }
-  };
+  }, [address]);
 
   // Filter users based on search input
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.username.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = Array.isArray(users)
+    ? users.filter(
+      (user: UserData) =>
+        user.name.toLowerCase().includes(search.toLowerCase()) ||
+        user.username.toLowerCase().includes(search.toLowerCase())
+    )
+    : [];
 
   // Sort users based on the selected filter
   const sortUsers = (users: UserData[]) => {
@@ -167,7 +166,7 @@ const UserTable: React.FC = () => {
     }
   };
 
-  // Sort and paginate users
+  // Sort users based on the selected filter
   const sortedUsers = sortUsers(filteredUsers);
 
   // Paginate users
@@ -180,33 +179,51 @@ const UserTable: React.FC = () => {
   const noUsersAvailable = sortedUsers.length === 0;
 
   // Handle thumbs up action
-  const handleThumbsUp = async (userId: string) => {
+  const handleThumbsUp = async (username: string) => {
     try {
-      const response = await fetch(`/api/users/${userId}/upvote`, { method: 'POST' });
+      const response = await fetch(`/api/users/${username}/upvote`, { method: 'POST' });
       if (!response.ok) {
         throw new Error('Failed to upvote');
       }
       const updatedUser = await response.json();
-      setUsers(users.map(user => user.id === userId ? updatedUser : user));
+      mutate(currentUsers =>
+        Array.isArray(currentUsers)
+          ? currentUsers.map(user => user.username === username ? updatedUser : user)
+          : currentUsers,
+        false
+      );
     } catch (error) {
       console.error('Error upvoting:', error);
     }
   };
 
   // Handle thumbs down action
-  const handleThumbsDown = async (userId: string) => {
-    try {
-      const response = await fetch(`/api/users/${userId}/downvote`, { method: 'POST' });
-      if (!response.ok) {
-        throw new Error('Failed to downvote');
-      }
-      const updatedUser = await response.json();
-      setUsers(users.map(user => user.id === userId ? updatedUser : user));
-    } catch (error) {
-      console.error('Error downvoting:', error);
-    }
+  const handleThumbsDown = async (username: string) => {
+    handleVote(username, false);
   };
 
+  // Handle vote action
+  const handleVote = async (username: string, isUpvote: boolean) => {
+    if (!address || votingWeight === 0) return;
+
+    try {
+      const response = await fetch(`/api/users/${username}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isUpvote, weight: votingWeight }),
+      });
+      if (!response.ok) throw new Error('Failed to vote');
+      const { user: updatedUser } = await response.json();
+      mutate(currentUsers =>
+        Array.isArray(currentUsers)
+          ? currentUsers.map(user => user.username === username ? updatedUser : user)
+          : currentUsers,
+        false
+      );
+    } catch (error) {
+      console.error('Error voting:', error);
+    }
+  };
 
   // Apply filter and close modal
   const applyFilter = () => {
@@ -221,7 +238,7 @@ const UserTable: React.FC = () => {
 
     try {
       // Check if the user already exists in the database
-      const userExists = users.some(user => user.username === twitterUsername);
+      const userExists = users?.some(user => user.username === twitterUsername);
       if (userExists) {
         setErrorMessage("This user is already in the database!");
         setIsProcessing(false);
@@ -243,7 +260,12 @@ const UserTable: React.FC = () => {
 
       // Add the new user to the state
       const newUser = await response.json();
-      setUsers(prevUsers => [...prevUsers, newUser]);
+      mutate(currentUsers =>
+        Array.isArray(currentUsers)
+          ? [...currentUsers, newUser]
+          : [newUser],
+        false
+      );
 
       setSuccessMessage("✅ Success - Milady has been added");
       setTimeout(() => {
@@ -260,7 +282,7 @@ const UserTable: React.FC = () => {
   };
 
   // handle claiming accounts
-  const handleClaimAccount = async (userId: string) => {
+  const handleClaimAccount = async (username: string) => {
     setIsProcessing(true);
     setErrorMessage("");
     setSuccessMessage("");
@@ -271,35 +293,24 @@ const UserTable: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ username }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to initiate OAuth');
       }
 
-      // Get the data from the response
-      const data = await response.json();
-
-      if (data.authUrl) {
-        window.location.href = data.authUrl; // Redirect to Twitter OAuth
-      } else {
-        throw new Error(data.message || 'Failed to initiate OAuth');
-      }
+      // Handle OAuth initiation success
+      const { authUrl } = await response.json();
+      window.location.href = authUrl;
     } catch (error) {
       console.error('Error initiating OAuth:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to initiate OAuth. Please try again.');
+      setErrorMessage("Failed to initiate OAuth. Please try again.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Log the users state
-  useEffect(() => {
-    console.log("Users state updated:", users);
-  }, [users]);
-
-  // Render the user table
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
@@ -315,7 +326,7 @@ const UserTable: React.FC = () => {
             color="secondary"
             className="bg-blue-100 text-blue-500"
             onClick={() => {
-              setSelectedUserId(users[0]?.id || null); // Use a valid user ID or set to null
+              setSelectedUserId(users && users.length > 0 ? users[0].username : null);
               setIsModalOpen(true);
             }}
           >
@@ -362,25 +373,25 @@ const UserTable: React.FC = () => {
             )
           }
         >
-          {(user) => (
-            <TableRow key={user.id}>
+          {(item) => (
+            <TableRow key={item.username}>
               <TableCell>
                 <div className="flex items-center">
                   <User
                     name={
                       <div className="checkmark-container">
-                        {user.name}
-                        {isGoldCheckmarkEligible(user) && (
+                        {item.name}
+                        {isGoldCheckmarkEligible(item) && (
                           <CheckBadgeIcon className="checkmark-icon text-yellow-500" />
                         )}
-                        {user.isClaimed && (
+                        {item.isClaimed && (
                           <CheckBadgeIcon className="checkmark-icon text-blue-500" />
                         )}
                       </div>
                     }
-                    description={`Followers: ${formatFollowers(user.followers)}`}
+                    description={`Followers: ${formatFollowers(item.followers)}`}
                     avatarProps={{
-                      src: user.avatarUrl,
+                      src: item.avatarUrl,
                       size: "lg",
                       radius: "full",
                       className: "object-cover w-14 h-14",
@@ -388,21 +399,21 @@ const UserTable: React.FC = () => {
                   />
                 </div>
               </TableCell>
-              <TableCell>@{user.username}</TableCell>
+              <TableCell>@{item.username}</TableCell>
               <TableCell>
                 <UserStatusBadge
-                  status={getStatus(user.score.up, user.score.down)}
-                  isMiladyOG={user.isMiladyOG}
-                  isRemiliaOfficial={user.isRemiliaOfficial}
+                  status={getStatus(item.score.up, item.score.down)}
+                  isMiladyOG={item.isMiladyOG}
+                  isRemiliaOfficial={item.isRemiliaOfficial}
                 />
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2 credit-score">
-                  <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(user.id)}>
-                    👍 <span className="ml-1">{user.score.up}</span>
+                  <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(item.username)} disabled={votingWeight === 0}>
+                    👍 <span className="ml-1">{item.score.up}</span>
                   </Button>
-                  <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(user.id)}>
-                    👎 <span className="ml-1">{user.score.down}</span>
+                  <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(item.username)} disabled={votingWeight === 0}>
+                    👎 <span className="ml-1">{item.score.down}</span>
                   </Button>
                 </div>
               </TableCell>
@@ -543,4 +554,3 @@ const UserTable: React.FC = () => {
 };
 
 export default UserTable;
-

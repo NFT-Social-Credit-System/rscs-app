@@ -7,7 +7,18 @@ const nextConfig = {
     TWITTER_CALLBACK_URL: process.env.TWITTER_CALLBACK_URL,
     NEXT_PUBLIC_INFURA_URL: process.env.NEXT_PUBLIC_INFURA_URL,
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'bson-ext': false,
+        'kerberos': false,
+        '@mongodb-js/zstd': false,
+        'snappy': false,
+        'aws4': false,
+        'mongodb-client-encryption': false,
+      };
+    }
     const path = require('path');
     config.resolve.alias['@rscs-backend'] = path.resolve(__dirname, '../rscs-backend');
     return config;
