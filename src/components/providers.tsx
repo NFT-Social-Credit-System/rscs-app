@@ -5,6 +5,7 @@ import { mainnet } from 'wagmi/chains';
 import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { publicProvider } from 'wagmi/providers/public';
 import '@rainbow-me/rainbowkit/styles.css';
+import { NextUIProvider } from "@nextui-org/react";
 
 /**
  * 
@@ -37,7 +38,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiConfig config={wagmiConfig}>
       <RainbowKitProvider chains={chains}>
-        {children}
+        <NextUIProvider>
+          {children}
+        </NextUIProvider>
       </RainbowKitProvider>
     </WagmiConfig>
   );

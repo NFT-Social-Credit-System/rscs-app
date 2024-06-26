@@ -146,6 +146,52 @@ export const initialUsers: UserData[] = [
         status: 'Approved',
         score: { up: 0, down: 0 }
       },
+      {
+        id: '14',
+        name: 'Starlin',
+        username: 'TokenWaifu',
+        followers: 1601,
+        avatarUrl: 'https://pbs.twimg.com/profile_images/1773114303081570305/VjVMx9ph_400x400.jpg',
+        status: 'Approved',
+        score: { up: 0, down: 0 }
+      },
+      {
+        id: '15',
+        name: 'sal ౨ৎ',
+        username: 'snowingsal',
+        followers: 2636,
+        avatarUrl: 'https://pbs.twimg.com/profile_images/1804693700284493825/aQ0qK7ed_400x400.jpg',
+        status: 'Approved',
+        score: { up: 420, down: 0 }
+      },
+      {
+        id: '16',
+        name:'☀︎ Sammi Wong ☀︎',
+        username: 'thrice_greatest',
+        followers: 73918,
+        avatarUrl: 'https://pbs.twimg.com/profile_images/1781282419192037376/WmMdJq4e_400x400.jpg',
+        status: 'Risk',
+        score: { up: 0, down: -1300 }
+      },
+      {
+        id: '17',
+        name: 'sebbusan.eth 🪲 (K/acc)',
+        username: 'sebbusaneth',
+        followers: 518,
+        avatarUrl: 'https://pbs.twimg.com/profile_images/1787723229517254656/UWchdHtq.jpg',
+        status: 'Approved',
+        score: { up: 0, down: 0 }
+      },
+      {
+        id: '18',
+        name: 'Socks (holey)',
+        username: 'SocksIroned',
+        followers: 3378,
+        avatarUrl: 'https://pbs.twimg.com/profile_images/1789191568429035520/KsRk2prO_400x400.jpg',
+        status: 'Approved',
+        score: { up: 1111, down: 111 }
+      },
+
 
 
   ];
