@@ -8,22 +8,9 @@
   --background-end-rgb: 255, 255, 255;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: rgb(var(--background-start-rgb));
 }
 
 @layer utilities {
@@ -32,3 +19,115 @@ body {
   }
 }
 
+.nextui-table {
+  width: 100%;
+  margin-top: 20px;
+  background-color: white;
+  /* Set background to white */
+  color: black;
+  /* Set text color to black */
+  border-radius: 8px;
+  /* Add border radius */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  /* Add shadow */
+  overflow: hidden;
+  /* Ensure content doesn't overflow */
+}
+
+.nextui-table .nextui-button {
+  margin-right: 5px;
+}
+
+.nextui-table .nextui-chip {
+  background-color: #e0e0e0;
+  /* Light grey background for chips */
+  color: black;
+  /* Black text for chips */
+}
+
+.nextui-table .nextui-chip.success {
+  background-color: #4caf50;
+  /* Green background for success chips */
+  color: white;
+  /* White text for success chips */
+}
+
+.nextui-table .nextui-chip.warning {
+  background-color: #ff9800;
+  /* Orange background for warning chips */
+  color: white;
+  /* White text for warning chips */
+}
+
+.nextui-table .nextui-chip.secondary {
+  background-color: #9c27b0;
+  /* Purple background for secondary chips */
+  color: white;
+  /* White text for secondary chips */
+}
+
+.nextui-table .nextui-button-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  color: #000;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.nextui-table .nextui-button-icon:hover {
+  background-color: #e0e0e0;
+}
+
+.credit-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nextui-button-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  /* Adjusted width */
+  padding: 5px 8px;
+  /* Added padding */
+  border-radius: 16px;
+  /* Soft corners */
+  background-color: #f0f0f0;
+  /* Default gray background color */
+  color: #000;
+  /* Text color */
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+
+.thumbs-up:hover {
+  background-color: rgba(76, 175, 80, 0.25) !important;
+  /* Green background with 25% opacity on hover */
+}
+
+.thumbs-down:hover {
+  background-color: rgba(244, 67, 54, 0.25) !important;
+  /* Red background with 25% opacity on hover */
+}
+
+.checkmark-container {
+  position: relative;
+  display: inline-block;
+}
+
+.checkmark-icon {
+  width: 20px; /* Adjust the size as needed */
+  height: 20px; /* Adjust the size as needed */
+  position: absolute;
+  top: 0;
+  right: -1.5rem; /* Adjust the position as needed */
+  top: -0.15rem;
+}

@@ -27,4 +27,3 @@ const wagmiConfig = createConfig({
 });
 
 export { RainbowKitProvider, chains, wagmiConfig };
-

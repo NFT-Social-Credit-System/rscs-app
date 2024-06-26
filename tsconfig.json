@@ -21,10 +21,12 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
-      ]
+      ],
+      "@rscs-backend/*": ["../rscs-backend/*"]
     },
     "typeRoots": [
       "./node_modules/@types",
@@ -36,7 +38,9 @@
     "**/*.ts",
     "**/*.tsx",
     "src/global.d.ts",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "rscs-backend",
+    "rscs-app"
   ],
   "exclude": [
     "node_modules"
