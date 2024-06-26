@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
-import { initialUsers } from '../../../components/InitialUserData'; // Adjust the path as necessary
+import connectDB from '@rscs-backend/backend/db';
+import User from '@rscs-backend/backend/models/TwitterUserData';
 
 export async function POST(request: Request) {
   try {
     const { userId } = await request.json();
 
-    // Check if the user exists in the initialUsers list
-    const user = initialUsers.find(user => user.id === userId);
+    // Connect to the database
+    await connectDB();
+
+    // Check if the user exists in the database
+    const user = await User.findById(userId);
 
     if (user) {
       // Simulate claiming account logic
@@ -21,6 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'User not found' });
     }
   } catch (error) {
+    console.error('Error in claim-account:', error);
     return NextResponse.json({ success: false, message: 'An error occurred' });
   }
 }

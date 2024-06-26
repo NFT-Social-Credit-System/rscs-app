@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TwitterApi } from 'twitter-api-v2';
-import { initialUsers } from '@/components/InitialUserData'; // Adjusted the path
+import connectDB from '@rscs-backend/backend/db';
+import User from '@rscs-backend/backend/models/TwitterUserData';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -33,8 +34,11 @@ export async function GET(request: NextRequest) {
 
     const { data: userObject } = await loggedClient.v2.me();
 
-    // Check if the user exists in the initialUsers list
-    const user = initialUsers.find(user => user.username === userObject.username);
+    // Connect to the database
+    await connectDB(); // Connect to the database
+
+    // Check if the user exists in the database
+    const user = await User.findOne({ username: userObject.username });
 
     if (!user) {
       return NextResponse.redirect(new URL('/?error=Please submit your username first!', request.url));

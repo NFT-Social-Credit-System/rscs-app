@@ -7,7 +7,11 @@ const nextConfig = {
     TWITTER_CALLBACK_URL: process.env.TWITTER_CALLBACK_URL,
     NEXT_PUBLIC_INFURA_URL: process.env.NEXT_PUBLIC_INFURA_URL,
   },
+  webpack: (config) => {
+    const path = require('path');
+    config.resolve.alias['@rscs-backend'] = path.resolve(__dirname, '../rscs-backend');
+    return config;
+  },
 }
 
 module.exports = nextConfig
-

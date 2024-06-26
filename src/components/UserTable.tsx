@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   Table,
   TableHeader,
@@ -19,15 +20,30 @@ import {
   Chip,
   Spinner,
 } from "@nextui-org/react";
-import { useState, useEffect } from "react";
-import { UserData, initialUsers } from "./InitialUserData";
-import UserStatusBadge from "./UserStatusBadge"; // Import the new component
-import { CheckBadgeIcon } from '@heroicons/react/24/solid'; // Import Heroicons
+import UserStatusBadge from "./UserStatusBadge";
+import { CheckBadgeIcon } from '@heroicons/react/24/solid';
 import TwitterAuthModal from './TwitterAuthModal';
-import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
 
-// Allows to properly format the Follower count to make it readable.
+// Define UserData interface here instead of importing from InitialUserData
+interface UserData {
+  id: string;
+  name: string;
+  username: string;
+  followers: number;
+  avatarUrl: string;
+  status: string;
+  isMiladyOG?: boolean;
+  isRemiliaOfficial?: boolean;
+  score: {
+    up: number;
+    down: number;
+  };
+  hasGoldenBadge?: boolean;
+  isClaimed?: boolean;
+}
+
+// Utility functions
 const formatFollowers = (followers: number) => {
   if (followers >= 10000) {
     return (followers / 1000).toFixed(1) + "K";
@@ -35,13 +51,11 @@ const formatFollowers = (followers: number) => {
   return followers.toLocaleString();
 };
 
-// Calculates the approval rate based on likes and dislikes.
 const calculateApprovalRate = (likes: number, dislikes: number) => {
   const totalVotes = likes + dislikes;
   return totalVotes === 0 ? 0 : (likes / totalVotes) * 100;
 };
 
-// Determines the status based on the approval rate.
 const getStatus = (likes: number, dislikes: number) => {
   const approvalRate = calculateApprovalRate(likes, dislikes);
   if (approvalRate >= 70) return "Approved";
@@ -49,7 +63,6 @@ const getStatus = (likes: number, dislikes: number) => {
   return "Risk";
 };
 
-// Function to determine if a user is eligible for the gold checkmark
 const isGoldCheckmarkEligible = (user: UserData) => {
   const totalVotes = user.score.up + user.score.down;
   const approvalRate = calculateApprovalRate(user.score.up, user.score.down);
@@ -57,24 +70,26 @@ const isGoldCheckmarkEligible = (user: UserData) => {
 };
 
 const UserTable: React.FC = () => {
-  const [users, setUsers] = useState<UserData[]>(initialUsers); // State to store user data
-  const [search, setSearch] = useState(""); // State to store search input
-  const [page, setPage] = useState(1); // State to store current page
-  const [filter, setFilter] = useState("approvalRateDesc"); // State to store current filter
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false); // State to control filter modal visibility
-  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false); // State to control submit modal visibility
-  const [twitterUsername, setTwitterUsername] = useState(""); // State to store Twitter username
-  const [isProcessing, setIsProcessing] = useState(false); // State to track processing status
-  const [errorMessage, setErrorMessage] = useState(""); // State to store error messages
-  const [successMessage, setSuccessMessage] = useState(""); // State to store success messages
-  const [claimedAccounts, setClaimedAccounts] = useState<string[]>([]); // State to store claimed accounts
-  const itemsPerPage = 10; // Number of items per page
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState("approvalRateDesc");
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [twitterUsername, setTwitterUsername] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null); // Add this line
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  const itemsPerPage = 10;
+
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
   const error = searchParams.get('error');
-
 
   // Handle auth and error messages
   useEffect(() => {
@@ -84,6 +99,24 @@ const UserTable: React.FC = () => {
       setErrorMessage(error);
     }
   }, [auth, error]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Fetch users from the API
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/users');
+      const data = await response.json();
+      setUsers(data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter users based on search input
   const filteredUsers = users.filter(
@@ -134,56 +167,57 @@ const UserTable: React.FC = () => {
     }
   };
 
-  const sortedUsers = sortUsers(filteredUsers); // Get sorted users
+  // Sort and paginate users
+  const sortedUsers = sortUsers(filteredUsers);
+
+  // Paginate users
   const paginatedUsers = sortedUsers.slice(
     (page - 1) * itemsPerPage,
     page * itemsPerPage
-  ); // Get paginated users
+  );
 
   // Check if there are no users after filtering
   const noUsersAvailable = sortedUsers.length === 0;
 
   // Handle thumbs up action
-  const handleThumbsUp = (userId: string) => {
-    setUsers(
-      users.map((user) =>
-        user.id === userId
-          ? { ...user, score: { ...user.score, up: user.score.up + 1 } }
-          : user
-      )
-    );
+  const handleThumbsUp = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/upvote`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to upvote');
+      }
+      const updatedUser = await response.json();
+      setUsers(users.map(user => user.id === userId ? updatedUser : user));
+    } catch (error) {
+      console.error('Error upvoting:', error);
+    }
   };
 
   // Handle thumbs down action
-  const handleThumbsDown = (userId: string) => {
-    setUsers(
-      users.map((user) =>
-        user.id === userId
-          ? { ...user, score: { ...user.score, down: user.score.down + 1 } }
-          : user
-      )
-    );
+  const handleThumbsDown = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/downvote`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error('Failed to downvote');
+      }
+      const updatedUser = await response.json();
+      setUsers(users.map(user => user.id === userId ? updatedUser : user));
+    } catch (error) {
+      console.error('Error downvoting:', error);
+    }
   };
 
-  // Update user status based on likes and dislikes
-  useEffect(() => {
-    setUsers(
-      users.map((user) => ({
-        ...user,
-        status: getStatus(user.score.up, user.score.down),
-      }))
-    );
-  }, [users]);
 
   // Apply filter and close modal
   const applyFilter = () => {
     setIsFilterModalOpen(false);
   };
 
+  // Handle submit account action
   const handleSubmitAccount = async () => {
     setIsProcessing(true);
-    setErrorMessage(""); // Clear any previous error messages
-    setSuccessMessage(""); // Clear any previous success messages
+    setErrorMessage("");
+    setSuccessMessage("");
 
     try {
       // Check if the user already exists in the database
@@ -194,30 +228,22 @@ const UserTable: React.FC = () => {
         return;
       }
 
-      // Simulate backend API call to fetch user data
-      const fetchUser = await new Promise<UserData>((resolve, reject) => {
-        setTimeout(() => {
-          // Simulate user not found for "jeffortless"
-          if (twitterUsername === "jeffortless") {
-            reject(new Error("User not found"));
-          } else {
-            resolve({
-              id: (users.length + 1).toString(),
-              name: twitterUsername,
-              username: twitterUsername,
-              avatarUrl: "https://placeholder.com/150",
-              followers: 0,
-              score: { up: 0, down: 0 },
-              status: "Moderate",
-              isRemiliaOfficial: false,
-              isMiladyOG: false
-            });
-          }
-        }, 2000);
+      // Submit the user to the database
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: twitterUsername }),
       });
 
-      // Add the new user to the list
-      setUsers(prevUsers => [...prevUsers, fetchUser]);
+      if (!response.ok) {
+        throw new Error('Failed to submit account');
+      }
+
+      // Add the new user to the state
+      const newUser = await response.json();
+      setUsers(prevUsers => [...prevUsers, newUser]);
 
       setSuccessMessage("✅ Success - Milady has been added");
       setTimeout(() => {
@@ -226,15 +252,8 @@ const UserTable: React.FC = () => {
         setSuccessMessage("");
       }, 2000); // Close the modal after 2 seconds
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message === "User not found") {
-          setErrorMessage("This user wasn't found, try again or submit another Milady");
-        } else {
-          console.error("Error submitting account:", error);
-        }
-      } else {
-        console.error("Unknown error:", error);
-      }
+      console.error('Error submitting account:', error);
+      setErrorMessage("Failed to submit account. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -259,6 +278,7 @@ const UserTable: React.FC = () => {
         throw new Error('Failed to initiate OAuth');
       }
 
+      // Get the data from the response
       const data = await response.json();
 
       if (data.authUrl) {
@@ -274,10 +294,12 @@ const UserTable: React.FC = () => {
     }
   };
 
+  // Log the users state
   useEffect(() => {
     console.log("Users state updated:", users);
   }, [users]);
 
+  // Render the user table
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
@@ -328,61 +350,63 @@ const UserTable: React.FC = () => {
           <TableColumn>APPROVAL STATUS BY COMMUNITY</TableColumn>
           <TableColumn>CREDIT SCORE</TableColumn>
         </TableHeader>
-        <TableBody>
-          {noUsersAvailable ? (
-            <TableRow key="no-users">
-              <TableCell>Unfortunately, there is nobody with this label yet, Milady :( </TableCell>
-              <TableCell>{" "}</TableCell>
-              <TableCell>{" "}</TableCell>
-              <TableCell>{" "}</TableCell>
-            </TableRow>
-          ) : (
-            paginatedUsers.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>
-                  <div className="flex items-center">
-                    <User
-                      name={
-                        <div className="checkmark-container">
-                          {user.name}
-                          {isGoldCheckmarkEligible(user) && (
-                            <CheckBadgeIcon className="checkmark-icon text-yellow-500" />
-                          )}
-                          {claimedAccounts.includes(user.id) && (
-                            <CheckBadgeIcon className="checkmark-icon text-blue-500" />
-                          )}
-                        </div>
-                      }
-                      description={`Followers: ${formatFollowers(user.followers)}`}
-                      avatarProps={{
-                        src: user.avatarUrl,
-                        size: "lg",
-                        radius: "full",
-                        className: "object-cover w-14 h-14",
-                      }}
-                    />
-                  </div>
-                </TableCell>
-                <TableCell>@{user.username}</TableCell>
-                <TableCell>
-                  <UserStatusBadge
-                    status={user.status}
-                    isMiladyOG={user.isMiladyOG}
-                    isRemiliaOfficial={user.isRemiliaOfficial}
+        <TableBody
+          items={paginatedUsers}
+          emptyContent={
+            isLoading ? (
+              <Spinner />
+            ) : noUsersAvailable ? (
+              "There are currently no users available."
+            ) : (
+              "No users match the current filters."
+            )
+          }
+        >
+          {(user) => (
+            <TableRow key={user.id}>
+              <TableCell>
+                <div className="flex items-center">
+                  <User
+                    name={
+                      <div className="checkmark-container">
+                        {user.name}
+                        {isGoldCheckmarkEligible(user) && (
+                          <CheckBadgeIcon className="checkmark-icon text-yellow-500" />
+                        )}
+                        {user.isClaimed && (
+                          <CheckBadgeIcon className="checkmark-icon text-blue-500" />
+                        )}
+                      </div>
+                    }
+                    description={`Followers: ${formatFollowers(user.followers)}`}
+                    avatarProps={{
+                      src: user.avatarUrl,
+                      size: "lg",
+                      radius: "full",
+                      className: "object-cover w-14 h-14",
+                    }}
                   />
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2 credit-score">
-                    <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(user.id)}>
-                      👍 <span className="ml-1">{user.score.up}</span>
-                    </Button>
-                    <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(user.id)}>
-                      👎 <span className="ml-1">{user.score.down}</span>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
+                </div>
+              </TableCell>
+              <TableCell>@{user.username}</TableCell>
+              <TableCell>
+                <UserStatusBadge
+                  status={getStatus(user.score.up, user.score.down)}
+                  isMiladyOG={user.isMiladyOG}
+                  isRemiliaOfficial={user.isRemiliaOfficial}
+                />
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2 credit-score">
+                  <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(user.id)}>
+                    👍 <span className="ml-1">{user.score.up}</span>
+                  </Button>
+                  <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(user.id)}>
+                    👎 <span className="ml-1">{user.score.down}</span>
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
           )}
         </TableBody>
       </Table>
@@ -519,3 +543,4 @@ const UserTable: React.FC = () => {
 };
 
 export default UserTable;
+
