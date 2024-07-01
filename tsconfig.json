@@ -1,5 +1,11 @@
 {
   "compilerOptions": {
+    "target": "ES2018",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "outDir": "./dist",
     "lib": [
       "dom",
       "dom.iterable",
@@ -7,13 +13,6 @@
     ],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
     "plugins": [
@@ -26,12 +25,18 @@
       "@/*": [
         "./src/*"
       ],
-      "@rscs-backend/*": ["../rscs-backend/*"]
+      "@rscs-backend/*": [
+        "../rscs-backend/*"
+      ]
     },
     "typeRoots": [
       "./node_modules/@types",
       "./src/types"
-    ]
+    ],
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
   },
   "include": [
     "next-env.d.ts",
@@ -44,5 +49,11 @@
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  }
 }
