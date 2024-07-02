@@ -422,12 +422,13 @@ const UserTable: React.FC = () => {
         </TableBody>
       </Table>
       <Pagination
-        total={Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage))}
-        initialPage={1}
-        page={page}
-        onChange={(newPage) => setPage(newPage)}
-        className="mt-4"
-      />
+  total={Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage))}
+  initialPage={1}
+  page={page}
+  onChange={(newPage) => setPage(newPage)}
+  className="mt-4"
+  hidden={sortedUsers.length <= itemsPerPage}
+/>
       <Modal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}

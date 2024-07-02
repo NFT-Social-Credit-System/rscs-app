@@ -1,10 +1,13 @@
-import { Providers } from '../components/providers';
-import './globals.css';
+"use client";
 
-export const metadata = {
-  title: 'Remilia Social Credit System',
-  description: 'The gatekeeping tool for remilia',
-};
+import React from 'react';
+import { Providers } from '../components/providers';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { config } from '@/lib/rainbowKit'
+import { WagmiConfig } from 'wagmi'
+import './globals.css'
+
+const queryClient = new QueryClient()
 
 export default function RootLayout({
   children,
@@ -14,8 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <WagmiConfig config={config}>
+          <QueryClientProvider client={queryClient}>
+            <Providers>{children}</Providers>
+          </QueryClientProvider>
+        </WagmiConfig>
       </body>
     </html>
-  )
+  );
 }
