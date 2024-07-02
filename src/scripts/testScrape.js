@@ -6,7 +6,7 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-const BASE_URL = 'http://95.217.2.184:5000';
+const BASE_URL = 'PLACEHOLDER';
 
 async function testScrape(username) {
   try {
