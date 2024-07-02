@@ -6,7 +6,22 @@ interface UserStatusBadgeProps {
   isRemiliaOfficial?: boolean;
 }
 
-const UserStatusBadge = ({ status, isMiladyOG, isRemiliaOfficial }: UserStatusBadgeProps) => {
+const UserStatusBadge: React.FC<UserStatusBadgeProps> = ({ status, isMiladyOG, isRemiliaOfficial }) => {
+  let badgeColor = '';
+  switch (status) {
+    case 'Approved':
+      badgeColor = 'bg-green-500';
+      break;
+    case 'Moderate':
+      badgeColor = 'bg-yellow-500';
+      break;
+    case 'Risk':
+      badgeColor = 'bg-red-500';
+      break;
+    default:
+      badgeColor = 'bg-gray-500';
+  }
+
   return (
     <div className="flex items-center">
       <Chip color={getStatusColor(status)} variant="flat">

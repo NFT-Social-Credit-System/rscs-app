@@ -7,7 +7,7 @@ import { ethers } from 'ethers';
  */
 
 const collections = [
-  { name: 'Bonkler', weight: 10, address: '0xabfae8a54e6817f57f9de7796044e9a60e61ad67' },
+  { name: 'Bonkler', weight: 10, address: '0xABFaE8A54e6817F57F9De7796044E9a60e61ad67' },
   { name: 'Milady Maker NFT', weight: 7, address: '0x5af0d9827e0c53e4799bb226655a1de152a425a5' },
   { name: 'Redacted Remilio Babies', weight: 5, address: '0xd3d9ddd0cf0a5f0bfb8f7fceae075df687eaebab' },
   { name: 'Schizoposters', weight: 4, address: '0xbfe47d6d4090940d1c7a0066b63d23875e3e2ac5' },
@@ -35,4 +35,28 @@ export async function checkVotingEligibility(address: string): Promise<number> {
   }
 
   return highestWeight;
+}
+
+// Milady OG Check
+const MILADY_CONTRACT = '0x5af0d9827e0c53e4799bb226655a1de152a425a5';
+const OG_CUTOFF_DATE = new Date('2022-05-23T05:04:00Z').getTime() / 1000; // Convert to Unix timestamp
+
+export async function checkMiladyOGStatus(address: string): Promise<boolean> {
+  const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_INFURA_URL || '');
+  
+  const contract = new ethers.Contract(MILADY_CONTRACT, ['event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)'], provider);
+
+  // Get all Transfer events to this address
+  const filter = contract.filters.Transfer(null, address);
+  const events = await contract.queryFilter(filter, 0, 'latest');
+
+  // Check if any transfer occurred before the cutoff date
+  for (const event of events) {
+    const block = await event.getBlock();
+    if (block.timestamp < OG_CUTOFF_DATE) {
+      return true;
+    }
+  }
+
+  return false;
 }
