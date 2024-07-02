@@ -5,8 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "NODE_ENV=development next dev",
-    "build": "next build",
-    "build:backend": "cd node_modules/@rscs/rscs-backend && npm install",
+    "build": "next build && npm run build:backend",
     "start": "NODE_ENV=production next start",
     "lint": "next lint"
   },
