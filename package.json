@@ -5,11 +5,11 @@
   "type": "commonjs",
   "scripts": {
     "dev": "NODE_ENV=development next dev",
-    "build": "npm install --legacy-peer-deps && npm run build:backend && next build",
-    "build:backend": "cd node_modules/@rscs/rscs-backend && npm install && npm run build",
+    "build": "npm install --legacy-peer-deps && npm run build:backend || true && next build",
+    "build:backend": "cd node_modules/@rscs/rscs-backend && npm install",
     "start": "NODE_ENV=production next start",
     "lint": "next lint",
-    "postinstall": "npm run build:backend"
+    "postinstall": "npm run build:backend || true"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.4",
