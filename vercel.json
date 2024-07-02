@@ -12,13 +12,6 @@
       "schedule": "0 0 * * *"
     }
   ],
-  "functions": {
-    "src/app/api/**/*.ts": {
-      "runtime": "edge",
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "images": {
     "sizes": [256, 640, 1080],
     "remotePatterns": [
@@ -51,25 +44,10 @@
       ]
     }
   ],
-  "routes": [
-    { "src": "/api/auth/callback", "dest": "/api/auth/callback" },
-    { "src": "/api/auth/initiate", "dest": "/api/auth/initiate" },
-    { "src": "/api/auth/verify", "dest": "/api/auth/verify" },
-    { "src": "/api/check-voting", "dest": "/api/check-voting" },
-    { "src": "/api/claim-account", "dest": "/api/claim-account" },
-    { "src": "/api/fetch", "dest": "/api/fetch" },
-    { "src": "/api/users/(?<username>[^/]+)/vote", "dest": "/api/users/[username]/vote" },
-    { "src": "/api/users/(?<username>[^/]+)/removeVotes", "dest": "/api/users/[username]/removeVotes" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ],
   "builds": [
     {
       "src": "package.json",
       "use": "@vercel/next"
-    },
-    {
-      "src": "node_modules/@rscs/rscs-backend/package.json",
-      "use": "@vercel/node"
     }
   ]
 }
