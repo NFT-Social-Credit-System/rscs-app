@@ -46,7 +46,7 @@
     ".next/types/**/*.ts",
     "rscs-backend",
     "rscs-app"
-  ],
+, "src/scripts/scheduleScrapeAll.js"  ],
   "exclude": [
     "node_modules"
   ],

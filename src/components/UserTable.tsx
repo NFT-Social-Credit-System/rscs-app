@@ -32,48 +32,66 @@ import useSWR from 'swr';
 
 // Define UserData interface here instead of importing from InitialUserData
 interface UserData {
-  id: string;
-  name: string;
   username: string;
-  followers: number;
-  avatarUrl: string;
-  status: string;
-  isMiladyOG?: boolean;
-  isRemiliaOfficial?: boolean;
+  display_name: string;
+  pfp_url: string;
+  followers: string;
+  following: string;
+  website: string;
+  description: string;
+  location: string;
+  join_date: string;
+  birth_date: string;
   score: {
     up: number;
     down: number;
   };
-  hasGoldenBadge?: boolean;
-  isClaimed?: boolean;
+  votes: Array<{
+    voter: string;
+    weight: number;
+    voteType: string;
+    timestamp: Date;
+  }>;
+  status: string;
+  isRemiliaOfficial: boolean;
+  isMiladyOG: boolean;
+  hasGoldenBadge: boolean;
+  isClaimed: boolean;
 }
 
 // Utility functions
-const formatFollowers = (followers: number | undefined | null) => {
+const formatFollowers = (followers: string | number | undefined | null): string => {
   if (followers === undefined || followers === null) {
     return "N/A";
   }
-  if (followers >= 1000) {
-    return (followers / 1000).toFixed(1) + "K";
+  const followerCount = typeof followers === 'string' ? parseInt(followers.replace(/,/g, ''), 10) : followers;
+  if (isNaN(followerCount)) {
+    return "N/A";
   }
-  return followers.toLocaleString();
+  if (followerCount >= 1000000) {
+    return (followerCount / 1000000).toFixed(1) + "M";
+  }
+  if (followerCount >= 1000) {
+    return (followerCount / 1000).toFixed(1) + "K";
+  }
+  return followerCount.toLocaleString();
 };
 
-const calculateApprovalRate = (likes: number, dislikes: number) => {
-  const totalVotes = likes + dislikes;
-  return totalVotes === 0 ? 0 : (likes / totalVotes) * 100;
+const calculateApprovalRate = (likes: number | undefined, dislikes: number | undefined) => {
+  const totalVotes = (likes || 0) + (dislikes || 0);
+  return totalVotes === 0 ? 0 : ((likes || 0) / totalVotes) * 100;
 };
 
-const getStatus = (likes: number, dislikes: number) => {
-  const approvalRate = calculateApprovalRate(likes, dislikes);
+const getStatus = (likes: number | undefined, dislikes: number | undefined) => {
+  const approvalRate = calculateApprovalRate(likes || 0, dislikes || 0);
   if (approvalRate >= 70) return "Approved";
   if (approvalRate >= 40) return "Moderate";
   return "Risk";
 };
 
 const isGoldCheckmarkEligible = (user: UserData) => {
-  const totalVotes = user.score.up + user.score.down;
-  const approvalRate = calculateApprovalRate(user.score.up, user.score.down);
+  const totalVotes = (user.score?.up || 0) + (user.score?.down || 0);
+  const approvalRate = calculateApprovalRate(user.score?.up || 0, user.score?.down || 0);
   return approvalRate > 90 && totalVotes > 100;
 };
 
@@ -119,8 +137,8 @@ const UserTable: React.FC = () => {
   const filteredUsers = Array.isArray(users)
     ? users.filter(
       (user: UserData) =>
-        user.name.toLowerCase().includes(search.toLowerCase()) ||
-        user.username.toLowerCase().includes(search.toLowerCase())
+        (user.display_name?.toLowerCase().includes(search.toLowerCase()) || '') ||
+        (user.username?.toLowerCase().includes(search.toLowerCase()) || '')
     )
     : [];
 
@@ -128,34 +146,34 @@ const UserTable: React.FC = () => {
   const sortUsers = (users: UserData[]) => {
     switch (filter) {
       case "followers":
-        return users.sort((a, b) => b.followers - a.followers);
+        return users.sort((a, b) => parseInt(b.followers) - parseInt(a.followers));
       case "nameAsc":
-        return users.sort((a, b) => a.name.localeCompare(b.name));
+        return users.sort((a, b) => a.display_name.localeCompare(b.display_name));
       case "nameDesc":
-        return users.sort((a, b) => b.name.localeCompare(a.name));
+        return users.sort((a, b) => b.display_name.localeCompare(a.display_name));
       case "approvalRateAsc":
         return users.sort(
           (a, b) =>
-            calculateApprovalRate(a.score.up, a.score.down) -
-            calculateApprovalRate(b.score.up, b.score.down)
+            calculateApprovalRate(a.score?.up, a.score?.down) -
+            calculateApprovalRate(b.score?.up, b.score?.down)
         );
       case "approvalRateDesc":
         return users.sort(
           (a, b) =>
-            calculateApprovalRate(b.score.up, b.score.down) -
-            calculateApprovalRate(a.score.up, a.score.down)
+            calculateApprovalRate(b.score?.up, b.score?.down) -
+            calculateApprovalRate(a.score?.up, a.score?.down)
         );
       case "statusApproved":
         return users.filter(
-          (user) => getStatus(user.score.up, user.score.down) === "Approved"
+          (user) => getStatus(user.score?.up, user.score?.down) === "Approved"
         );
       case "statusModerate":
         return users.filter(
-          (user) => getStatus(user.score.up, user.score.down) === "Moderate"
+          (user) => getStatus(user.score?.up, user.score?.down) === "Moderate"
         );
       case "statusRisk":
         return users.filter(
-          (user) => getStatus(user.score.up, user.score.down) === "Risk"
+          (user) => getStatus(user.score?.up, user.score?.down) === "Risk"
         );
       case "remiliaOfficial":
         return users.filter((user) => user.isRemiliaOfficial);
@@ -237,15 +255,6 @@ const UserTable: React.FC = () => {
     setSuccessMessage("");
 
     try {
-      // Check if the user already exists in the database
-      const userExists = users?.some(user => user.username === twitterUsername);
-      if (userExists) {
-        setErrorMessage("This user is already in the database!");
-        setIsProcessing(false);
-        return;
-      }
-
-      // Submit the user to the database
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
@@ -255,10 +264,10 @@ const UserTable: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit account');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to submit account');
       }
 
-      // Add the new user to the state
       const newUser = await response.json();
       mutate(currentUsers =>
         Array.isArray(currentUsers)
@@ -272,10 +281,10 @@ const UserTable: React.FC = () => {
         setIsSubmitModalOpen(false);
         setTwitterUsername("");
         setSuccessMessage("");
-      }, 2000); // Close the modal after 2 seconds
+      }, 2000);
     } catch (error) {
       console.error('Error submitting account:', error);
-      setErrorMessage("Failed to submit account. Please try again.");
+      setErrorMessage(error instanceof Error ? error.message : "Failed to submit account. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -310,6 +319,12 @@ const UserTable: React.FC = () => {
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    if (users) {
+      console.log('Raw user data:', JSON.stringify(users, null, 2));
+    }
+  }, [users]);
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
@@ -380,7 +395,7 @@ const UserTable: React.FC = () => {
                   <User
                     name={
                       <div className="checkmark-container">
-                        {item.name}
+                        {item.display_name}
                         {isGoldCheckmarkEligible(item) && (
                           <CheckBadgeIcon className="checkmark-icon text-yellow-500" />
                         )}
@@ -389,9 +404,13 @@ const UserTable: React.FC = () => {
                         )}
                       </div>
                     }
-                    description={`Followers: ${formatFollowers(item.followers)}`}
+                    description={
+                      <div className="text-xs">
+                        Followers: {formatFollowers(item.followers)}
+                      </div>
+                    }
                     avatarProps={{
-                      src: item.avatarUrl,
+                      src: item.pfp_url,
                       size: "lg",
                       radius: "full",
                       className: "object-cover w-14 h-14",
@@ -402,7 +421,7 @@ const UserTable: React.FC = () => {
               <TableCell>@{item.username}</TableCell>
               <TableCell>
                 <UserStatusBadge
-                  status={getStatus(item.score.up, item.score.down)}
+                  status={getStatus(item.score?.up, item.score?.down)}
                   isMiladyOG={item.isMiladyOG}
                   isRemiliaOfficial={item.isRemiliaOfficial}
                 />
@@ -410,10 +429,10 @@ const UserTable: React.FC = () => {
               <TableCell>
                 <div className="flex items-center gap-2 credit-score">
                   <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(item.username)} disabled={votingWeight === 0}>
-                    👍 <span className="ml-1">{item.score.up}</span>
+                    👍 <span className="ml-1">{item.score?.up}</span>
                   </Button>
                   <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(item.username)} disabled={votingWeight === 0}>
-                    👎 <span className="ml-1">{item.score.down}</span>
+                    👎 <span className="ml-1">{item.score?.down}</span>
                   </Button>
                 </div>
               </TableCell>
@@ -422,13 +441,13 @@ const UserTable: React.FC = () => {
         </TableBody>
       </Table>
       <Pagination
-  total={Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage))}
-  initialPage={1}
-  page={page}
-  onChange={(newPage) => setPage(newPage)}
-  className="mt-4"
-  hidden={sortedUsers.length <= itemsPerPage}
-/>
+        total={Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage))}
+        initialPage={1}
+        page={page}
+        onChange={(newPage) => setPage(newPage)}
+        className="mt-4"
+        hidden={sortedUsers.length <= itemsPerPage}
+      />
       <Modal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
