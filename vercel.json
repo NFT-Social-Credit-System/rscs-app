@@ -5,7 +5,7 @@
   "outputDirectory": ".next",
   "framework": "nextjs",
   "cleanUrls": true,
-  "installCommand": "pnpm install",
+  "installCommand": "pnpm install && cd node_modules/@rscs/rscs-backend && npm install",
   "crons": [
     {
       "path": "/api/cron",
@@ -48,6 +48,10 @@
     {
       "src": "package.json",
       "use": "@vercel/next"
+    },
+    {
+      "src": "node_modules/@rscs/rscs-backend/package.json",
+      "use": "@vercel/node"
     }
   ]
 }
