@@ -1,17 +1,13 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
-import connectToDatabase from '../../../../utils/mongodb';
+import connectToDatabase from '../../../../../utils/mongodb';
 
 const MILADY_CONTRACT = '0x5af0d9827e0c53e4799bb226655a1de152a425a5';
 const OG_CUTOFF_DATE = new Date('2022-05-23T05:04:00Z').getTime() / 1000; // Convert to Unix timestamp
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  const { username } = req.query;
-  const { walletAddress } = req.body;
+export async function POST(request: NextRequest, { params }: { params: { username: string } }) {
+  const { username } = params;
+  const { walletAddress } = await request.json();
 
   try {
     const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_INFURA_URL || '');
@@ -33,9 +29,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { $set: { isMiladyOG: isMiladyOG } }
     );
 
-    res.status(200).json({ isMiladyOG });
+    return NextResponse.json({ isMiladyOG });
   } catch (error) {
     console.error('Error checking Milady OG status:', error);
-    res.status(500).json({ message: 'Error checking Milady OG status' });
+    return NextResponse.json({ message: 'Error checking Milady OG status' }, { status: 500 });
   }
 }

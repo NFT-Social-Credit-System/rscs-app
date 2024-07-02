@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Table,
   TableHeader,
@@ -148,6 +148,24 @@ const UserTable: React.FC = () => {
     }
   }, [auth, authError]);
 
+  const removeVotes = useCallback(async (username: string) => {
+    try {
+      const response = await fetch(`/api/users/${username}/removeVotes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to remove votes');
+      }
+      
+      await mutate();
+    } catch (error) {
+      console.error('Error removing votes:', error);
+    }
+  }, [address, mutate]);
+
   useEffect(() => {
     if (address) {
       const checkEligibility = async () => {
@@ -165,13 +183,10 @@ const UserTable: React.FC = () => {
       };
   
       checkEligibility(); // Initial check
-  
-      // Set up 24-hour interval
       const intervalId = setInterval(checkEligibility, 24 * 60 * 60 * 1000);
-  
       return () => clearInterval(intervalId);
     }
-  }, [address, votingWeight, users]);
+  }, [address, votingWeight, users, removeVotes]);
 
   // Filter users based on search input
   const filteredUsers = Array.isArray(users)
@@ -430,24 +445,6 @@ const UserTable: React.FC = () => {
       setErrorMessage("Failed to initiate OAuth. Please try again.");
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const removeVotes = async (username: string) => {
-    try {
-      const response = await fetch(`/api/users/${username}/removeVotes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to remove votes');
-      }
-      
-      await mutate();
-    } catch (error) {
-      console.error('Error removing votes:', error);
     }
   };
 
@@ -784,3 +781,4 @@ const LoadingModal: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
 };
 
 export default UserTable;
+

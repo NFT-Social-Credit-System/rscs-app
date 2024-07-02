@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useSignMessage } from 'wagmi';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid';
@@ -17,20 +17,7 @@ const WalletConnect: React.FC = () => {
   const [isSigned, setIsSigned] = useState(false);
   const [signatureError, setSignatureError] = useState<string | null>(null);
 
-  const handleSign = async () => {
-    if (!address) return;
-    try {
-      const message = "Sign this message to verify your wallet ownership";
-      await signMessage({ message });
-      setIsSigned(true);
-      await checkEligibility();
-    } catch (error) {
-      console.error('Error signing message:', error);
-      setSignatureError('Signature failed');
-    }
-  };
-
-  const checkEligibility = async () => {
+  const checkEligibility = useCallback(async () => {
     if (!address) return;
     try {
       const response = await fetch(`/api/check-voting?address=${address}`); 
@@ -43,13 +30,26 @@ const WalletConnect: React.FC = () => {
     } catch (error) {
       console.error('Error checking voting eligibility:', error);
     }
-  };
+  }, [address]);
+
+  const handleSign = useCallback(() => {
+    if (!address) return;
+    try {
+      const message = "Sign this message to verify your wallet ownership";
+      signMessage({ message });
+      setIsSigned(true);
+      checkEligibility();
+    } catch (error) {
+      console.error('Error signing message:', error);
+      setSignatureError('Signature failed');
+    }
+  }, [address, signMessage, checkEligibility]);
 
   useEffect(() => {
     if (isConnected && !isSigned) {
       handleSign();
     }
-  }, [isConnected, isSigned]);
+  }, [isConnected, isSigned, handleSign]);
 
   return (
     <div className="relative w-full">
@@ -70,7 +70,7 @@ const WalletConnect: React.FC = () => {
             <p className="text-green-500 font-semibold">Eligible to vote with weight: {votingWeight}</p>
           ) : (
             <p className="text-yellow-500 font-semibold">
-              You can't vote without Remilia Eco NFTs - please visit our Docs
+              You can&apos;t vote without Remilia Eco NFTs - please visit our Docs
             </p>
           )}
         </div>

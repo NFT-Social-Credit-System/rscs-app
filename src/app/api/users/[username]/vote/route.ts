@@ -4,17 +4,17 @@ const TwitterUser = require('@rscs-backend/backend/models/TwitterUserData');
 
 export async function POST(
   request: Request,
-  { params }: { params: { userId: string } }
+  { params }: { params: { username: string } }
 ) {
   try {
     console.log('Connecting to database...');
     await connectToDatabase();
     console.log('Connected to database');
     
-    const { userId } = params;
+    const { username } = params;
     const { voteType, weight } = await request.json();
     
-    const user = await TwitterUser.findById(userId);
+    const user = await TwitterUser.findOne({ username });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
