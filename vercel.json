@@ -1,23 +1,7 @@
 {
   "builds": [
     {
-      "src": "src/app/api/users/[userId]/vote/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/users/[userId]/profile/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/posts/[postId]/comments/route.ts",
-      "use": "@vercel/node"
-    },
-    {
       "src": "src/app/api/auth/callback/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/auth/verify/route.ts",
       "use": "@vercel/node"
     },
     {
@@ -25,7 +9,7 @@
       "use": "@vercel/node"
     },
     {
-      "src": "src/app/api/fetch/route.ts",
+      "src": "src/app/api/auth/verify/route.ts",
       "use": "@vercel/node"
     },
     {
@@ -37,11 +21,23 @@
       "use": "@vercel/node"
     },
     {
+      "src": "src/app/api/fetch/route.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "src/app/api/users/[userId]/vote/route.ts",
+      "use": "@vercel/node"
+    },
+    {
       "src": "src/app/api/users/route.ts",
       "use": "@vercel/node"
     },
     {
-      "src": "src/scripts/testScrape.js",
+      "src": "src/app/api/users/[username]/checkMiladyOG.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "src/app/api/users/[username]/removeVotes.ts",
       "use": "@vercel/node"
     }
   ],
