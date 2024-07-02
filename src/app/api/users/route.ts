@@ -18,43 +18,39 @@ export async function POST(request: Request) {
     const { username } = await request.json();
     const { db } = await connectToDatabase();
 
-    // Check if user already exists
+    // Check if the user already exists
     const existingUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
 
     if (existingUser) {
-      return NextResponse.json({ message: 'User already exists' }, { status: 409 });
+      return NextResponse.json({ message: 'User already exists in the database', user: existingUser }, { status: 200 });
     }
 
-    // Request scrape from the server
-    try {
-      console.log('Requesting scrape for:', username);
-      const scrapeResponse = await axios.post('http://95.217.2.184:5000/scrape', {
-        username,
-        timestamp: new Date().getTime()
-      });
-      console.log('Scrape response:', scrapeResponse.data);
-      
-      // Wait for a short time to allow the scraper to insert the user
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // If user doesn't exist, proceed with adding them
+    console.log('Requesting scrape for:', username);
+    await axios.post('http://95.217.2.184:5000/scrape', {
+      username,
+      timestamp: new Date().getTime()
+    });
 
-      // Fetch the newly created user
+    // Start polling for the user
+    let attempts = 0;
+    const maxAttempts = 15;
+    const pollInterval = 2000;
+
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
       const newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
       
       if (newUser) {
-        return NextResponse.json({ message: 'User created successfully', user: newUser }, { status: 201 });
-      } else {
-        return NextResponse.json({ message: 'User creation pending' }, { status: 202 });
+        return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
       }
-    } catch (scrapeError) {
-      if (axios.isAxiosError(scrapeError)) {
-        console.error('Error requesting scrape:', scrapeError.response?.data || scrapeError.message);
-      } else {
-        console.error('Unknown error during scrape request:', scrapeError);
-      }
-      return NextResponse.json({ message: 'Failed to request user scrape' }, { status: 500 });
+      
+      attempts++;
     }
+
+    return NextResponse.json({ message: 'User creation pending', username }, { status: 202 });
   } catch (error) {
-    console.error('Error in POST /api/users:', error);
+    console.error('Error adding user:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -23,7 +23,7 @@ import {
   Spinner,
 } from "@nextui-org/react";
 import UserStatusBadge from "./UserStatusBadge";
-import { CheckBadgeIcon } from '@heroicons/react/24/solid';
+import { CheckBadgeIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 import TwitterAuthModal from './TwitterAuthModal';
 import { useSearchParams } from 'next/navigation';
 import { useAccount } from 'wagmi';
@@ -64,17 +64,32 @@ const formatFollowers = (followers: string | number | undefined | null): string 
   if (followers === undefined || followers === null) {
     return "N/A";
   }
-  const followerCount = typeof followers === 'string' ? parseInt(followers.replace(/,/g, ''), 10) : followers;
-  if (isNaN(followerCount)) {
+
+  if (typeof followers === 'string') {
+    // Handle pre-formatted strings (e.g., "100K", "1.2M")
+    const match = followers.match(/^(\d+(\.\d+)?)([KM])?$/);
+    if (match) {
+      const [, num, , suffix] = match;
+      const value = parseFloat(num);
+      if (suffix === 'K') return (value >= 1000 ? (value / 1000).toFixed(1) : value) + 'K';
+      if (suffix === 'M') return value + 'M';
+      return value.toString();
+    }
+
+    followers = parseFloat(followers.replace(/,/g, ''));
+  }
+
+  if (isNaN(followers)) {
     return "N/A";
   }
-  if (followerCount >= 1000000) {
-    return (followerCount / 1000000).toFixed(1) + "M";
+
+  if (followers >= 1000000) {
+    return (followers / 1000000).toFixed(1) + "M";
   }
-  if (followerCount >= 1000) {
-    return (followerCount / 1000).toFixed(1) + "K";
+  if (followers >= 1000) {
+    return (followers / 1000).toFixed(1) + "K";
   }
-  return followerCount.toLocaleString();
+  return followers.toString();
 };
 
 const calculateApprovalRate = (likes: number | undefined, dislikes: number | undefined) => {
@@ -116,7 +131,11 @@ const UserTable: React.FC = () => {
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
   const authError = searchParams.get('error');
-  const { data: users, error: fetchError, isLoading, mutate } = useSWR<UserData[]>('/api/fetch', fetcher);
+  const { data: users, error: fetchError, isLoading: isLoadingUsers, mutate } = useSWR<UserData[]>('/api/fetch', fetcher);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalMessageType, setModalMessageType] = useState<"success" | "warning" | null>(null);
 
   // Handle auth and error messages
   useEffect(() => {
@@ -142,11 +161,24 @@ const UserTable: React.FC = () => {
     )
     : [];
 
+  const parseFollowers = (followers: string): number => {
+    if (typeof followers !== 'string') return 0;
+    
+    const num = parseFloat(followers.replace(/,/g, ''));
+    if (followers.endsWith('K')) {
+      return num * 1000;
+    }
+    if (followers.endsWith('M')) {
+      return num * 1000000;
+    }
+    return num;
+  };
+
   // Sort users based on the selected filter
   const sortUsers = (users: UserData[]) => {
     switch (filter) {
       case "followers":
-        return users.sort((a, b) => parseInt(b.followers) - parseInt(a.followers));
+        return users.sort((a, b) => parseFollowers(b.followers) - parseFollowers(a.followers));
       case "nameAsc":
         return users.sort((a, b) => a.display_name.localeCompare(b.display_name));
       case "nameDesc":
@@ -248,11 +280,34 @@ const UserTable: React.FC = () => {
     setIsFilterModalOpen(false);
   };
 
-  // Handle submit account action
+  const handleSubmitAccountClick = () => {
+    setIsSubmitModalOpen(true);
+    setIsSubmitModalVisible(true);
+  };
+
+  const isValidUsername = (username: string): boolean => {
+    const regex = /^[a-zA-Z0-9_]+$/;
+    return regex.test(username);
+  };
+
   const handleSubmitAccount = async () => {
+    if (!isValidUsername(twitterUsername)) {
+      setModalMessage("Username can only contain letters, numbers, and underscores.");
+      setModalMessageType("warning");
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMessage("");
     setSuccessMessage("");
+    setModalMessage("");
+    setModalMessageType(null);
+    setIsLoading(true);
+
+    // Close the submit modal after 3 seconds
+    setTimeout(() => {
+      setIsSubmitModalVisible(false);
+    }, 3000);
 
     try {
       const response = await fetch('/api/users', {
@@ -263,30 +318,67 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to submit account');
+      const data = await response.json();
+
+      if (data.message === 'User already exists in the database') {
+        setModalMessage('User already exists in the database');
+        setModalMessageType("warning");
+        setIsLoading(false);
+      } else if (response.ok) {
+        setIsSubmitModalVisible(false);
+        pollForUser();
+      } else {
+        throw new Error(data.message || 'Failed to submit account');
       }
-
-      const newUser = await response.json();
-      mutate(currentUsers =>
-        Array.isArray(currentUsers)
-          ? [...currentUsers, newUser]
-          : [newUser],
-        false
-      );
-
-      setSuccessMessage("✅ Success - Milady has been added");
-      setTimeout(() => {
-        setIsSubmitModalOpen(false);
-        setTwitterUsername("");
-        setSuccessMessage("");
-      }, 2000);
     } catch (error) {
       console.error('Error submitting account:', error);
       setErrorMessage(error instanceof Error ? error.message : "Failed to submit account. Please try again.");
+      setIsLoading(false);
     } finally {
       setIsProcessing(false);
+      // Close the modal after 3 seconds if it's still open
+      setTimeout(() => {
+        setIsSubmitModalVisible(false);
+        setModalMessage("");
+        setModalMessageType(null);
+      }, 3000);
+    }
+  };
+
+  const pollForUser = async () => {
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: twitterUsername }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 200 || response.status === 201) {
+        setIsLoading(false);
+        setSuccessMessage('User added successfully');
+        mutate(currentUsers =>
+          Array.isArray(currentUsers)
+            ? [...currentUsers, data.user]
+            : [data.user],
+          false
+        );
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 3000);
+      } else if (response.status === 202) {
+        // User addition is still pending, poll again after a delay
+        setTimeout(pollForUser, 2000);
+      } else {
+        throw new Error(data.message || 'Failed to add user');
+      }
+    } catch (error) {
+      console.error('Error polling for user:', error);
+      setIsLoading(false);
+      setErrorMessage(error instanceof Error ? error.message : 'An error occurred while adding the user');
     }
   };
 
@@ -333,7 +425,7 @@ const UserTable: React.FC = () => {
           <Button
             color="primary"
             className="bg-blue-100 text-blue-500 mr-2"
-            onClick={() => setIsSubmitModalOpen(true)}
+            onClick={handleSubmitAccountClick}
           >
             Submit Account
           </Button>
@@ -379,7 +471,7 @@ const UserTable: React.FC = () => {
         <TableBody
           items={paginatedUsers}
           emptyContent={
-            isLoading ? (
+            isLoadingUsers ? (
               <Spinner />
             ) : noUsersAvailable ? (
               "There are currently no users available."
@@ -505,8 +597,13 @@ const UserTable: React.FC = () => {
         </ModalContent>
       </Modal>
       <Modal
-        isOpen={isSubmitModalOpen}
-        onClose={() => setIsSubmitModalOpen(false)}
+        isOpen={isSubmitModalOpen && isSubmitModalVisible}
+        onClose={() => {
+          setIsSubmitModalOpen(false);
+          setIsSubmitModalVisible(false);
+          setModalMessage("");
+          setModalMessageType(null);
+        }}
         className="submit-account-modal"
       >
         <ModalContent>
@@ -518,29 +615,38 @@ const UserTable: React.FC = () => {
               <Input
                 placeholder="username"
                 value={twitterUsername}
-                onChange={(e) => setTwitterUsername(e.target.value)}
+                onChange={(e) => {
+                  setTwitterUsername(e.target.value);
+                  setModalMessage("");
+                  setModalMessageType(null);
+                }}
                 className="twitter-username-input h-10 ml-2"
               />
             </div>
-            {errorMessage && (
-              <div className="text-red-500 mt-2">
-                <span>❌ {errorMessage}</span>
-              </div>
-            )}
-            {isProcessing && (
+            {isProcessing && !modalMessage && (
               <div className="flex items-center justify-center mt-4">
                 <Spinner size="sm" />
                 <span className="ml-2">Processing...</span>
               </div>
             )}
-            {successMessage && (
-              <div className="text-green-500 mt-2">
-                <span>{successMessage}</span>
+            {modalMessage && (
+              <div className={`mt-4 text-center ${modalMessageType === "warning" ? "text-yellow-500" : "text-green-500"}`}>
+                {modalMessageType === "warning" ? (
+                  <ExclamationTriangleIcon className="inline-block w-5 h-5 mr-2" />
+                ) : (
+                  "✅"
+                )}
+                {modalMessage}
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="light" onPress={() => setIsSubmitModalOpen(false)}>
+            <Button color="danger" variant="light" onPress={() => {
+              setIsSubmitModalOpen(false);
+              setIsSubmitModalVisible(false);
+              setModalMessage("");
+              setModalMessageType(null);
+            }}>
               Cancel
             </Button>
             <Button color="primary" onPress={handleSubmitAccount} disabled={isProcessing || !twitterUsername}>
@@ -569,6 +675,24 @@ const UserTable: React.FC = () => {
           </div>
         )}
       </TwitterAuthModal>
+      <LoadingModal isLoading={isLoading} />
+      {(errorMessage || successMessage) && (
+        <div className="fixed bottom-4 left-4 bg-white shadow-md rounded-lg p-4">
+          {errorMessage && <span className="text-red-500">❌ {errorMessage}</span>}
+          {successMessage && <span className="text-green-500">✅ {successMessage}</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LoadingModal: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
+  if (!isLoading) return null;
+
+  return (
+    <div className="fixed bottom-4 left-4 bg-white shadow-md rounded-lg p-4 flex items-center">
+      <Spinner size="sm" />
+      <span className="ml-2">Processing submission...</span>
     </div>
   );
 };

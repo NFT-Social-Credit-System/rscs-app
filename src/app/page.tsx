@@ -6,6 +6,7 @@ import AuthSuccessModal from '../components/AuthSuccessModal';
 import { useEffect, useState } from 'react';
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 
 function SearchParamsHandler() {
   const searchParams = useSearchParams();
@@ -42,6 +43,14 @@ export default function Home() {
           <WalletConnect />
         </header>
         <main className="flex-grow flex flex-col items-center justify-center">
+        <div className="flex items-center justify-center">
+          <Image
+            src="/remilia.png"
+            alt="Remilia logo"
+            width={100}
+            height={100}
+          />
+        </div>
           <h1 className="text-3xl font-bold text-black">Remilia Social Credit System</h1>
           <UserTable />
           <SearchParamsHandler />
