@@ -131,3 +131,14 @@ body {
   right: -1.5rem; /* Adjust the position as needed */
   top: -0.15rem;
 }
+
+.popover-trigger:hover + [data-popover-content] {
+  opacity: 1;
+  visibility: visible;
+}
+
+[data-popover-content] {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}

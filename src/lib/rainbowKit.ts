@@ -1,29 +1,24 @@
-import { getDefaultWallets, RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { configureChains, createConfig } from 'wagmi';
+import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+import { http, createConfig } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
-import { publicProvider } from 'wagmi/providers/public';
-
-/**
- * @author Ozzy(@Zerocousin) for Remilia Social Credit System
- * RainbowKit is a library that provides a UI for connecting and managing wallets.
- * 
- */
-
-const { chains, publicClient } = configureChains(
-  [mainnet],
-  [publicProvider()]
-);
+import { createPublicClient } from 'viem';
 
 const { connectors } = getDefaultWallets({
   appName: 'RSCS',
   projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID!,
-  chains
 });
 
-const wagmiConfig = createConfig({
-  autoConnect: true,
+const publicClient = createPublicClient({
+  chain: mainnet,
+  transport: http()
+});
+
+const config = createConfig({
+  chains: [mainnet],
   connectors,
-  publicClient
+  transports: {
+    [mainnet.id]: http(),
+  },
 });
 
-export { RainbowKitProvider, chains, wagmiConfig };
+export { config };

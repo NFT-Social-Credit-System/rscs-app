@@ -60,6 +60,9 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('Error in callback:', error);
-    return NextResponse.json({ error: 'Authentication failed' }, { status: 500 });
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
   }
 }

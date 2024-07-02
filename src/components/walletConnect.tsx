@@ -65,11 +65,13 @@ const WalletConnect: React.FC = () => {
         </div>
       )}
       {isConnected && isSigned && eligible !== null && !signatureError && (
-        <div>
+        <div className="absolute right-0 mt-16 text-sm bg-white p-2 rounded shadow-md">
           {eligible ? (
-            <p>Eligible to vote with weight: {votingWeight}</p>
+            <p className="text-green-500 font-semibold">Eligible to vote with weight: {votingWeight}</p>
           ) : (
-            <p>Not eligible to vote</p>
+            <p className="text-yellow-500 font-semibold">
+              You can't vote without Remilia Eco NFTs - please visit our Docs
+            </p>
           )}
         </div>
       )}

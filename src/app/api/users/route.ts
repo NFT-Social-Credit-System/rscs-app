@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import connectToDatabase from '../../../utils/mongodb';
-const TwitterUser = require('@rscs-backend/backend/models/TwitterUserData');
+import axios from 'axios';
 
 export async function GET() {
   try {
-    const conn = await connectToDatabase();
-    const users = await TwitterUser.find({}).lean();
+    const { db } = await connectToDatabase();
+    const users = await db.collection('Users').find({}).toArray();
     return NextResponse.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -16,32 +16,41 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { username } = await request.json();
-    const conn = await connectToDatabase();
-    
-    // Check if user already exists
-    const existingUser = await TwitterUser.findOne({ username });
+    const { db } = await connectToDatabase();
+
+    // Check if the user already exists
+    const existingUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
+
     if (existingUser) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+      return NextResponse.json({ message: 'User already exists in the database', user: existingUser }, { status: 200 });
     }
 
-    // Create new user
-    const newUser = {
+    // If user doesn't exist, proceed with adding them
+    console.log('Requesting scrape for:', username);
+    await axios.post('http://95.217.2.184:5000/scrape', {
       username,
-      name: username,
-      followersCount: 0,
-      profilePictureUrl: '',
-      status: 'Moderate',
-      isMiladyOG: false,
-      isRemiliaOfficial: false,
-      score: { up: 0, down: 0 },
-      votes: [],
-      isClaimed: false,
-    };
+      timestamp: new Date().getTime()
+    });
 
-    const result = await TwitterUser.create(newUser);
-    return NextResponse.json(result, { status: 201 });
+    // Start polling for the user
+    let attempts = 0;
+    const maxAttempts = 15;
+    const pollInterval = 2000;
+
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      const newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
+      
+      if (newUser) {
+        return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
+      }
+      
+      attempts++;
+    }
+
+    return NextResponse.json({ message: 'User creation pending', username }, { status: 202 });
   } catch (error) {
-    console.error('Error creating user:', error);
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+    console.error('Error adding user:', error);
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }

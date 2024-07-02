@@ -23,57 +23,91 @@ import {
   Spinner,
 } from "@nextui-org/react";
 import UserStatusBadge from "./UserStatusBadge";
-import { CheckBadgeIcon } from '@heroicons/react/24/solid';
+import { CheckBadgeIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 import TwitterAuthModal from './TwitterAuthModal';
 import { useSearchParams } from 'next/navigation';
-import { useAccount } from 'wagmi';
+import { useAccount, useConnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 import { checkVotingEligibility } from '../lib/checkBalance';
 import useSWR from 'swr';
 
 // Define UserData interface here instead of importing from InitialUserData
 interface UserData {
-  id: string;
-  name: string;
   username: string;
-  followers: number;
-  avatarUrl: string;
-  status: string;
-  isMiladyOG?: boolean;
-  isRemiliaOfficial?: boolean;
+  display_name: string;
+  pfp_url: string;
+  followers: string;
+  following: string;
+  website: string;
+  description: string;
+  location: string;
+  join_date: string;
+  birth_date: string;
   score: {
     up: number;
     down: number;
   };
-  hasGoldenBadge?: boolean;
-  isClaimed?: boolean;
+  votes: Array<{
+    voter: string;
+    weight: number;
+    voteType: string;
+    timestamp: Date;
+  }>;
+  status: string;
+  isRemiliaOfficial: boolean;
+  isMiladyOG: boolean;
+  hasGoldenBadge: boolean;
+  isClaimed: boolean;
 }
 
 // Utility functions
-const formatFollowers = (followers: number | undefined | null) => {
+const formatFollowers = (followers: string | number | undefined | null): string => {
   if (followers === undefined || followers === null) {
     return "N/A";
+  }
+
+  if (typeof followers === 'string') {
+    // Handle pre-formatted strings (e.g., "100K", "1.2M")
+    const match = followers.match(/^(\d+(\.\d+)?)([KM])?$/);
+    if (match) {
+      const [, num, , suffix] = match;
+      const value = parseFloat(num);
+      if (suffix === 'K') return (value >= 1000 ? (value / 1000).toFixed(1) : value) + 'K';
+      if (suffix === 'M') return value + 'M';
+      return value.toString();
+    }
+
+    followers = parseFloat(followers.replace(/,/g, ''));
+  }
+
+  if (isNaN(followers)) {
+    return "N/A";
+  }
+
+  if (followers >= 1000000) {
+    return (followers / 1000000).toFixed(1) + "M";
   }
   if (followers >= 1000) {
     return (followers / 1000).toFixed(1) + "K";
   }
-  return followers.toLocaleString();
+  return followers.toString();
 };
 
-const calculateApprovalRate = (likes: number, dislikes: number) => {
-  const totalVotes = likes + dislikes;
-  return totalVotes === 0 ? 0 : (likes / totalVotes) * 100;
+const calculateApprovalRate = (likes: number | undefined, dislikes: number | undefined) => {
+  const totalVotes = (likes || 0) + (dislikes || 0);
+  return totalVotes === 0 ? 0 : ((likes || 0) / totalVotes) * 100;
 };
 
-const getStatus = (likes: number, dislikes: number) => {
-  const approvalRate = calculateApprovalRate(likes, dislikes);
+const getStatus = (likes: number | undefined, dislikes: number | undefined) => {
+  const approvalRate = calculateApprovalRate(likes || 0, dislikes || 0);
   if (approvalRate >= 70) return "Approved";
   if (approvalRate >= 40) return "Moderate";
   return "Risk";
 };
 
 const isGoldCheckmarkEligible = (user: UserData) => {
-  const totalVotes = user.score.up + user.score.down;
-  const approvalRate = calculateApprovalRate(user.score.up, user.score.down);
+  const totalVotes = (user.score?.up || 0) + (user.score?.down || 0);
+  const approvalRate = calculateApprovalRate(user.score?.up || 0, user.score?.down || 0);
   return approvalRate > 90 && totalVotes > 100;
 };
 
@@ -94,11 +128,16 @@ const UserTable: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [votingWeight, setVotingWeight] = useState<number>(0);
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { connect } = useConnect();
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
   const authError = searchParams.get('error');
-  const { data: users, error: fetchError, isLoading, mutate } = useSWR<UserData[]>('/api/fetch', fetcher);
+  const { data: users, error: fetchError, isLoading: isLoadingUsers, mutate } = useSWR<UserData[]>('/api/fetch', fetcher);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalMessageType, setModalMessageType] = useState<"success" | "warning" | null>(null);
 
   // Handle auth and error messages
   useEffect(() => {
@@ -111,51 +150,83 @@ const UserTable: React.FC = () => {
 
   useEffect(() => {
     if (address) {
-      checkVotingEligibility(address).then(setVotingWeight);
+      const checkEligibility = async () => {
+        const newVotingWeight = await checkVotingEligibility(address);
+        if (newVotingWeight !== votingWeight) {
+          setVotingWeight(newVotingWeight);
+          if (newVotingWeight === 0) {
+            // Remove votes for all users
+            const usernames = users?.map(user => user.username) || [];
+            for (const username of usernames) {
+              await removeVotes(username);
+            }
+          }
+        }
+      };
+  
+      checkEligibility(); // Initial check
+  
+      // Set up 24-hour interval
+      const intervalId = setInterval(checkEligibility, 24 * 60 * 60 * 1000);
+  
+      return () => clearInterval(intervalId);
     }
-  }, [address]);
+  }, [address, votingWeight, users]);
 
   // Filter users based on search input
   const filteredUsers = Array.isArray(users)
     ? users.filter(
       (user: UserData) =>
-        user.name.toLowerCase().includes(search.toLowerCase()) ||
-        user.username.toLowerCase().includes(search.toLowerCase())
+        (user.display_name?.toLowerCase().includes(search.toLowerCase()) || '') ||
+        (user.username?.toLowerCase().includes(search.toLowerCase()) || '')
     )
     : [];
+
+  const parseFollowers = (followers: string): number => {
+    if (typeof followers !== 'string') return 0;
+    
+    const num = parseFloat(followers.replace(/,/g, ''));
+    if (followers.endsWith('K')) {
+      return num * 1000;
+    }
+    if (followers.endsWith('M')) {
+      return num * 1000000;
+    }
+    return num;
+  };
 
   // Sort users based on the selected filter
   const sortUsers = (users: UserData[]) => {
     switch (filter) {
       case "followers":
-        return users.sort((a, b) => b.followers - a.followers);
+        return users.sort((a, b) => parseFollowers(b.followers) - parseFollowers(a.followers));
       case "nameAsc":
-        return users.sort((a, b) => a.name.localeCompare(b.name));
+        return users.sort((a, b) => a.display_name.localeCompare(b.display_name));
       case "nameDesc":
-        return users.sort((a, b) => b.name.localeCompare(a.name));
+        return users.sort((a, b) => b.display_name.localeCompare(a.display_name));
       case "approvalRateAsc":
         return users.sort(
           (a, b) =>
-            calculateApprovalRate(a.score.up, a.score.down) -
-            calculateApprovalRate(b.score.up, b.score.down)
+            calculateApprovalRate(a.score?.up, a.score?.down) -
+            calculateApprovalRate(b.score?.up, b.score?.down)
         );
       case "approvalRateDesc":
         return users.sort(
           (a, b) =>
-            calculateApprovalRate(b.score.up, b.score.down) -
-            calculateApprovalRate(a.score.up, a.score.down)
+            calculateApprovalRate(b.score?.up, b.score?.down) -
+            calculateApprovalRate(a.score?.up, a.score?.down)
         );
       case "statusApproved":
         return users.filter(
-          (user) => getStatus(user.score.up, user.score.down) === "Approved"
+          (user) => getStatus(user.score?.up, user.score?.down) === "Approved"
         );
       case "statusModerate":
         return users.filter(
-          (user) => getStatus(user.score.up, user.score.down) === "Moderate"
+          (user) => getStatus(user.score?.up, user.score?.down) === "Moderate"
         );
       case "statusRisk":
         return users.filter(
-          (user) => getStatus(user.score.up, user.score.down) === "Risk"
+          (user) => getStatus(user.score?.up, user.score?.down) === "Risk"
         );
       case "remiliaOfficial":
         return users.filter((user) => user.isRemiliaOfficial);
@@ -230,22 +301,36 @@ const UserTable: React.FC = () => {
     setIsFilterModalOpen(false);
   };
 
-  // Handle submit account action
+  const handleSubmitAccountClick = () => {
+    setIsSubmitModalOpen(true);
+    setIsSubmitModalVisible(true);
+  };
+
+  const isValidUsername = (username: string): boolean => {
+    const regex = /^[a-zA-Z0-9_]+$/;
+    return regex.test(username);
+  };
+
   const handleSubmitAccount = async () => {
+    if (!isValidUsername(twitterUsername)) {
+      setModalMessage("Username can only contain letters, numbers, and underscores.");
+      setModalMessageType("warning");
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMessage("");
     setSuccessMessage("");
+    setModalMessage("");
+    setModalMessageType(null);
+    setIsLoading(true);
+
+    // Close the submit modal after 3 seconds
+    setTimeout(() => {
+      setIsSubmitModalVisible(false);
+    }, 3000);
 
     try {
-      // Check if the user already exists in the database
-      const userExists = users?.some(user => user.username === twitterUsername);
-      if (userExists) {
-        setErrorMessage("This user is already in the database!");
-        setIsProcessing(false);
-        return;
-      }
-
-      // Submit the user to the database
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
@@ -254,30 +339,67 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to submit account');
+      const data = await response.json();
+
+      if (data.message === 'User already exists in the database') {
+        setModalMessage('User already exists in the database');
+        setModalMessageType("warning");
+        setIsLoading(false);
+      } else if (response.ok) {
+        setIsSubmitModalVisible(false);
+        pollForUser();
+      } else {
+        throw new Error(data.message || 'Failed to submit account');
       }
-
-      // Add the new user to the state
-      const newUser = await response.json();
-      mutate(currentUsers =>
-        Array.isArray(currentUsers)
-          ? [...currentUsers, newUser]
-          : [newUser],
-        false
-      );
-
-      setSuccessMessage("✅ Success - Milady has been added");
-      setTimeout(() => {
-        setIsSubmitModalOpen(false);
-        setTwitterUsername("");
-        setSuccessMessage("");
-      }, 2000); // Close the modal after 2 seconds
     } catch (error) {
       console.error('Error submitting account:', error);
-      setErrorMessage("Failed to submit account. Please try again.");
+      setErrorMessage(error instanceof Error ? error.message : "Failed to submit account. Please try again.");
+      setIsLoading(false);
     } finally {
       setIsProcessing(false);
+      // Close the modal after 3 seconds if it's still open
+      setTimeout(() => {
+        setIsSubmitModalVisible(false);
+        setModalMessage("");
+        setModalMessageType(null);
+      }, 3000);
+    }
+  };
+
+  const pollForUser = async () => {
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: twitterUsername }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 200 || response.status === 201) {
+        setIsLoading(false);
+        setSuccessMessage('User added successfully');
+        mutate(currentUsers =>
+          Array.isArray(currentUsers)
+            ? [...currentUsers, data.user]
+            : [data.user],
+          false
+        );
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 3000);
+      } else if (response.status === 202) {
+        // User addition is still pending, poll again after a delay
+        setTimeout(pollForUser, 2000);
+      } else {
+        throw new Error(data.message || 'Failed to add user');
+      }
+    } catch (error) {
+      console.error('Error polling for user:', error);
+      setIsLoading(false);
+      setErrorMessage(error instanceof Error ? error.message : 'An error occurred while adding the user');
     }
   };
 
@@ -311,6 +433,80 @@ const UserTable: React.FC = () => {
     }
   };
 
+  const removeVotes = async (username: string) => {
+    try {
+      const response = await fetch(`/api/users/${username}/removeVotes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to remove votes');
+      }
+      
+      await mutate();
+    } catch (error) {
+      console.error('Error removing votes:', error);
+    }
+  };
+
+  const handleWalletChange = async (username: string) => {
+    if (!isConnected) {
+      try {
+        await connect({ connector: injected() });
+      } catch (error) {
+        console.error('Error connecting wallet:', error);
+        return;
+      }
+    }
+    
+    if (!address) {
+      console.error('No wallet address available');
+      return;
+    }
+  
+    try {
+      const newVotingWeight = await checkVotingEligibility(address);
+      if (newVotingWeight !== votingWeight) {
+        setVotingWeight(newVotingWeight);
+        if (newVotingWeight === 0) {
+          await removeVotes(username);
+        }
+      }
+  
+      const response = await fetch(`/api/users/${username}/wallet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      
+      if (response.ok) {
+        const { isMiladyOG } = await response.json();
+        mutate(currentUsers =>
+          Array.isArray(currentUsers)
+            ? currentUsers.map(user => 
+                user.username === username 
+                  ? { ...user, isMiladyOG, walletAddress: address }
+                  : user
+              )
+            : currentUsers,
+          false
+        );
+      } else {
+        throw new Error('Failed to update wallet');
+      }
+    } catch (error) {
+      console.error('Error updating wallet:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (users) {
+      console.log('Raw user data:', JSON.stringify(users, null, 2));
+    }
+  }, [users]);
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
@@ -318,7 +514,7 @@ const UserTable: React.FC = () => {
           <Button
             color="primary"
             className="bg-blue-100 text-blue-500 mr-2"
-            onClick={() => setIsSubmitModalOpen(true)}
+            onClick={handleSubmitAccountClick}
           >
             Submit Account
           </Button>
@@ -364,7 +560,7 @@ const UserTable: React.FC = () => {
         <TableBody
           items={paginatedUsers}
           emptyContent={
-            isLoading ? (
+            isLoadingUsers ? (
               <Spinner />
             ) : noUsersAvailable ? (
               "There are currently no users available."
@@ -380,18 +576,19 @@ const UserTable: React.FC = () => {
                   <User
                     name={
                       <div className="checkmark-container">
-                        {item.name}
-                        {isGoldCheckmarkEligible(item) && (
-                          <CheckBadgeIcon className="checkmark-icon text-yellow-500" />
-                        )}
+                        {item.display_name}
                         {item.isClaimed && (
                           <CheckBadgeIcon className="checkmark-icon text-blue-500" />
                         )}
                       </div>
                     }
-                    description={`Followers: ${formatFollowers(item.followers)}`}
+                    description={
+                      <div className="text-xs">
+                        Followers: {formatFollowers(item.followers)}
+                      </div>
+                    }
                     avatarProps={{
-                      src: item.avatarUrl,
+                      src: item.pfp_url,
                       size: "lg",
                       radius: "full",
                       className: "object-cover w-14 h-14",
@@ -402,7 +599,7 @@ const UserTable: React.FC = () => {
               <TableCell>@{item.username}</TableCell>
               <TableCell>
                 <UserStatusBadge
-                  status={getStatus(item.score.up, item.score.down)}
+                  status={getStatus(item.score?.up, item.score?.down)}
                   isMiladyOG={item.isMiladyOG}
                   isRemiliaOfficial={item.isRemiliaOfficial}
                 />
@@ -410,10 +607,10 @@ const UserTable: React.FC = () => {
               <TableCell>
                 <div className="flex items-center gap-2 credit-score">
                   <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(item.username)} disabled={votingWeight === 0}>
-                    👍 <span className="ml-1">{item.score.up}</span>
+                    👍 <span className="ml-1">{item.score?.up}</span>
                   </Button>
                   <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(item.username)} disabled={votingWeight === 0}>
-                    👎 <span className="ml-1">{item.score.down}</span>
+                    👎 <span className="ml-1">{item.score?.down}</span>
                   </Button>
                 </div>
               </TableCell>
@@ -427,6 +624,7 @@ const UserTable: React.FC = () => {
         page={page}
         onChange={(newPage) => setPage(newPage)}
         className="mt-4"
+        hidden={sortedUsers.length <= itemsPerPage}
       />
       <Modal
         isOpen={isFilterModalOpen}
@@ -485,8 +683,13 @@ const UserTable: React.FC = () => {
         </ModalContent>
       </Modal>
       <Modal
-        isOpen={isSubmitModalOpen}
-        onClose={() => setIsSubmitModalOpen(false)}
+        isOpen={isSubmitModalOpen && isSubmitModalVisible}
+        onClose={() => {
+          setIsSubmitModalOpen(false);
+          setIsSubmitModalVisible(false);
+          setModalMessage("");
+          setModalMessageType(null);
+        }}
         className="submit-account-modal"
       >
         <ModalContent>
@@ -498,29 +701,38 @@ const UserTable: React.FC = () => {
               <Input
                 placeholder="username"
                 value={twitterUsername}
-                onChange={(e) => setTwitterUsername(e.target.value)}
+                onChange={(e) => {
+                  setTwitterUsername(e.target.value);
+                  setModalMessage("");
+                  setModalMessageType(null);
+                }}
                 className="twitter-username-input h-10 ml-2"
               />
             </div>
-            {errorMessage && (
-              <div className="text-red-500 mt-2">
-                <span>❌ {errorMessage}</span>
-              </div>
-            )}
-            {isProcessing && (
+            {isProcessing && !modalMessage && (
               <div className="flex items-center justify-center mt-4">
                 <Spinner size="sm" />
                 <span className="ml-2">Processing...</span>
               </div>
             )}
-            {successMessage && (
-              <div className="text-green-500 mt-2">
-                <span>{successMessage}</span>
+            {modalMessage && (
+              <div className={`mt-4 text-center ${modalMessageType === "warning" ? "text-yellow-500" : "text-green-500"}`}>
+                {modalMessageType === "warning" ? (
+                  <ExclamationTriangleIcon className="inline-block w-5 h-5 mr-2" />
+                ) : (
+                  "✅"
+                )}
+                {modalMessage}
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="light" onPress={() => setIsSubmitModalOpen(false)}>
+            <Button color="danger" variant="light" onPress={() => {
+              setIsSubmitModalOpen(false);
+              setIsSubmitModalVisible(false);
+              setModalMessage("");
+              setModalMessageType(null);
+            }}>
               Cancel
             </Button>
             <Button color="primary" onPress={handleSubmitAccount} disabled={isProcessing || !twitterUsername}>
@@ -549,6 +761,24 @@ const UserTable: React.FC = () => {
           </div>
         )}
       </TwitterAuthModal>
+      <LoadingModal isLoading={isLoading} />
+      {(errorMessage || successMessage) && (
+        <div className="fixed bottom-4 left-4 bg-white shadow-md rounded-lg p-4">
+          {errorMessage && <span className="text-red-500">❌ {errorMessage}</span>}
+          {successMessage && <span className="text-green-500">✅ {successMessage}</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LoadingModal: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
+  if (!isLoading) return null;
+
+  return (
+    <div className="fixed bottom-4 left-4 bg-white shadow-md rounded-lg p-4 flex items-center">
+      <Spinner size="sm" />
+      <span className="ml-2">Processing submission...</span>
     </div>
   );
 };
