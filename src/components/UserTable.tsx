@@ -150,9 +150,28 @@ const UserTable: React.FC = () => {
 
   useEffect(() => {
     if (address) {
-      checkVotingEligibility(address).then(setVotingWeight);
+      const checkEligibility = async () => {
+        const newVotingWeight = await checkVotingEligibility(address);
+        if (newVotingWeight !== votingWeight) {
+          setVotingWeight(newVotingWeight);
+          if (newVotingWeight === 0) {
+            // Remove votes for all users
+            const usernames = users?.map(user => user.username) || [];
+            for (const username of usernames) {
+              await removeVotes(username);
+            }
+          }
+        }
+      };
+  
+      checkEligibility(); // Initial check
+  
+      // Set up 24-hour interval
+      const intervalId = setInterval(checkEligibility, 24 * 60 * 60 * 1000);
+  
+      return () => clearInterval(intervalId);
     }
-  }, [address]);
+  }, [address, votingWeight, users]);
 
   // Filter users based on search input
   const filteredUsers = Array.isArray(users)
@@ -414,6 +433,24 @@ const UserTable: React.FC = () => {
     }
   };
 
+  const removeVotes = async (username: string) => {
+    try {
+      const response = await fetch(`/api/users/${username}/removeVotes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to remove votes');
+      }
+      
+      await mutate();
+    } catch (error) {
+      console.error('Error removing votes:', error);
+    }
+  };
+
   const handleWalletChange = async (username: string) => {
     if (!isConnected) {
       try {
@@ -428,8 +465,16 @@ const UserTable: React.FC = () => {
       console.error('No wallet address available');
       return;
     }
-
+  
     try {
+      const newVotingWeight = await checkVotingEligibility(address);
+      if (newVotingWeight !== votingWeight) {
+        setVotingWeight(newVotingWeight);
+        if (newVotingWeight === 0) {
+          await removeVotes(username);
+        }
+      }
+  
       const response = await fetch(`/api/users/${username}/wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -438,7 +483,6 @@ const UserTable: React.FC = () => {
       
       if (response.ok) {
         const { isMiladyOG } = await response.json();
-        // Update the user in the local state with the new OG status
         mutate(currentUsers =>
           Array.isArray(currentUsers)
             ? currentUsers.map(user => 
@@ -454,7 +498,6 @@ const UserTable: React.FC = () => {
       }
     } catch (error) {
       console.error('Error updating wallet:', error);
-      // Handle error (e.g., show error message to user)
     }
   };
 
@@ -509,71 +552,71 @@ const UserTable: React.FC = () => {
         selectionMode="none"
       >
         <TableHeader>
-  <TableColumn>NAME</TableColumn>
-  <TableColumn>TWITTER ACCOUNT</TableColumn>
-  <TableColumn>APPROVAL STATUS BY COMMUNITY</TableColumn>
-  <TableColumn>CREDIT SCORE</TableColumn>
-</TableHeader>
-<TableBody
-  items={paginatedUsers}
-  emptyContent={
-    isLoadingUsers ? (
-      <Spinner />
-    ) : noUsersAvailable ? (
-      "There are currently no users available."
-    ) : (
-      "No users match the current filters."
-    )
-  }
->
-  {(item) => (
-    <TableRow key={item.username}>
-      <TableCell>
-        <div className="flex items-center">
-          <User
-            name={
-              <div className="checkmark-container">
-                {item.display_name}
-                {item.isClaimed && (
-                  <CheckBadgeIcon className="checkmark-icon text-blue-500" />
-                )}
-              </div>
-            }
-            description={
-              <div className="text-xs">
-                Followers: {formatFollowers(item.followers)}
-              </div>
-            }
-            avatarProps={{
-              src: item.pfp_url,
-              size: "lg",
-              radius: "full",
-              className: "object-cover w-14 h-14",
-            }}
-          />
-        </div>
-      </TableCell>
-      <TableCell>@{item.username}</TableCell>
-      <TableCell>
-        <UserStatusBadge
-          status={getStatus(item.score?.up, item.score?.down)}
-          isMiladyOG={item.isMiladyOG}
-          isRemiliaOfficial={item.isRemiliaOfficial}
-        />
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2 credit-score">
-          <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(item.username)} disabled={votingWeight === 0}>
-            👍 <span className="ml-1">{item.score?.up}</span>
-          </Button>
-          <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(item.username)} disabled={votingWeight === 0}>
-            👎 <span className="ml-1">{item.score?.down}</span>
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  )}
-</TableBody>
+          <TableColumn>NAME</TableColumn>
+          <TableColumn>TWITTER ACCOUNT</TableColumn>
+          <TableColumn>APPROVAL STATUS BY COMMUNITY</TableColumn>
+          <TableColumn>CREDIT SCORE</TableColumn>
+        </TableHeader>
+        <TableBody
+          items={paginatedUsers}
+          emptyContent={
+            isLoadingUsers ? (
+              <Spinner />
+            ) : noUsersAvailable ? (
+              "There are currently no users available."
+            ) : (
+              "No users match the current filters."
+            )
+          }
+        >
+          {(item) => (
+            <TableRow key={item.username}>
+              <TableCell>
+                <div className="flex items-center">
+                  <User
+                    name={
+                      <div className="checkmark-container">
+                        {item.display_name}
+                        {item.isClaimed && (
+                          <CheckBadgeIcon className="checkmark-icon text-blue-500" />
+                        )}
+                      </div>
+                    }
+                    description={
+                      <div className="text-xs">
+                        Followers: {formatFollowers(item.followers)}
+                      </div>
+                    }
+                    avatarProps={{
+                      src: item.pfp_url,
+                      size: "lg",
+                      radius: "full",
+                      className: "object-cover w-14 h-14",
+                    }}
+                  />
+                </div>
+              </TableCell>
+              <TableCell>@{item.username}</TableCell>
+              <TableCell>
+                <UserStatusBadge
+                  status={getStatus(item.score?.up, item.score?.down)}
+                  isMiladyOG={item.isMiladyOG}
+                  isRemiliaOfficial={item.isRemiliaOfficial}
+                />
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2 credit-score">
+                  <Button size="sm" className="nextui-button-chip thumbs-up" onClick={() => handleThumbsUp(item.username)} disabled={votingWeight === 0}>
+                    👍 <span className="ml-1">{item.score?.up}</span>
+                  </Button>
+                  <Button size="sm" className="nextui-button-chip thumbs-down" onClick={() => handleThumbsDown(item.username)} disabled={votingWeight === 0}>
+                    👎 <span className="ml-1">{item.score?.down}</span>
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
       </Table>
       <Pagination
         total={Math.max(1, Math.ceil(sortedUsers.length / itemsPerPage))}
