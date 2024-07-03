@@ -5,7 +5,7 @@
   "outputDirectory": ".next",
   "framework": "nextjs",
   "cleanUrls": true,
-  "installCommand": "pnpm install && git clone https://github.com/Remilia-Social-Credit-System/rscs-backend.git node_modules/@rscs/rscs-backend",
+  "installCommand": "pnpm install && git clone https://github.com/Remilia-Social-Credit-System/rscs-backend.git node_modules/@rscs/rscs-backend && cd node_modules/@rscs/rscs-backend && npm install",
   "crons": [
     {
       "path": "/api/cron",

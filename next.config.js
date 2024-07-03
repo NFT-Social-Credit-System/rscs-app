@@ -25,7 +25,7 @@ const nextConfig = {
       };
     }
     const path = require('path');
-    config.resolve.alias['@rscs-backend'] = path.resolve(__dirname, '../rscs-backend');
+    config.resolve.alias['@rscs-backend'] = path.resolve(__dirname, 'node_modules/@rscs/rscs-backend');
     return config;
   },
   async headers() {
