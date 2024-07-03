@@ -85,7 +85,7 @@ const formatFollowers = (followers: string | number | undefined | null): string 
   }
 
   if (followers >= 1000000) {
-    return (followers / 1000000).toFixed(1) + "M";
+    return (followers / 10000000).toFixed(1) + "M";
   }
   if (followers >= 1000) {
     return (followers / 1000).toFixed(1) + "K";
@@ -312,23 +312,9 @@ const UserTable: React.FC = () => {
   };
 
   const handleSubmitAccount = async () => {
-    if (!isValidUsername(twitterUsername)) {
-      setModalMessage("Username can only contain letters, numbers, and underscores.");
-      setModalMessageType("warning");
-      return;
-    }
-
     setIsProcessing(true);
-    setErrorMessage("");
-    setSuccessMessage("");
     setModalMessage("");
     setModalMessageType(null);
-    setIsLoading(true);
-
-    // Close the submit modal after 3 seconds
-    setTimeout(() => {
-      setIsSubmitModalVisible(false);
-    }, 3000);
 
     try {
       const response = await fetch('/api/users', {
@@ -339,68 +325,56 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
-      const data = await response.json();
-
-      if (data.message === 'User already exists in the database') {
-        setModalMessage('User already exists in the database');
-        setModalMessageType("warning");
-        setIsLoading(false);
-      } else if (response.ok) {
-        setIsSubmitModalVisible(false);
-        pollForUser();
+      if (response.status === 202) {
+        setModalMessage("Account submission initiated. Please check back later.");
+        setModalMessageType("success");
+        pollForUser(twitterUsername);
+      } else if (response.status === 200) {
+        const data = await response.json();
+        setModalMessage(data.message);
+        setModalMessageType("success");
       } else {
-        throw new Error(data.message || 'Failed to submit account');
+        const errorData = await response.json();
+        setModalMessage(errorData.message || "An error occurred");
+        setModalMessageType("warning");
       }
     } catch (error) {
-      console.error('Error submitting account:', error);
-      setErrorMessage(error instanceof Error ? error.message : "Failed to submit account. Please try again.");
-      setIsLoading(false);
+      console.error('Error:', error);
+      setModalMessage("An unexpected error occurred");
+      setModalMessageType("warning");
     } finally {
       setIsProcessing(false);
-      // Close the modal after 3 seconds if it's still open
-      setTimeout(() => {
-        setIsSubmitModalVisible(false);
-        setModalMessage("");
-        setModalMessageType(null);
-      }, 3000);
     }
   };
 
-  const pollForUser = async () => {
-    try {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: twitterUsername }),
-      });
+  const pollForUser = async (username: string) => {
+    const maxAttempts = 30;
+    const pollInterval = 2000;
+    let attempts = 0;
 
-      const data = await response.json();
-
-      if (response.status === 200 || response.status === 201) {
-        setIsLoading(false);
-        setSuccessMessage('User added successfully');
-        mutate(currentUsers =>
-          Array.isArray(currentUsers)
-            ? [...currentUsers, data.user]
-            : [data.user],
-          false
-        );
-        setTimeout(() => {
-          setSuccessMessage('');
-        }, 3000);
-      } else if (response.status === 202) {
-        // User addition is still pending, poll again after a delay
-        setTimeout(pollForUser, 2000);
-      } else {
-        throw new Error(data.message || 'Failed to add user');
+    while (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      
+      try {
+        const response = await fetch(`/api/users/${username}`);
+        if (response.ok) {
+          const user = await response.json();
+          if (user) {
+            mutate(); // Refresh the user list
+            setModalMessage("Account added successfully");
+            setModalMessageType("success");
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error polling for user:', error);
       }
-    } catch (error) {
-      console.error('Error polling for user:', error);
-      setIsLoading(false);
-      setErrorMessage(error instanceof Error ? error.message : 'An error occurred while adding the user');
+      
+      attempts++;
     }
+
+    setModalMessage("Account creation is taking longer than expected. Please check back later.");
+    setModalMessageType("warning");
   };
 
   // handle claiming accounts

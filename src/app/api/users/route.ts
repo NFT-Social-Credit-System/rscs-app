@@ -32,23 +32,8 @@ export async function POST(request: Request) {
       timestamp: new Date().getTime()
     });
 
-    // Start polling for the user
-    let attempts = 0;
-    const maxAttempts = 15;
-    const pollInterval = 2000;
-
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
-      const newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
-      
-      if (newUser) {
-        return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
-      }
-      
-      attempts++;
-    }
-
-    return NextResponse.json({ message: 'User creation pending', username }, { status: 202 });
+    // Return immediately with a pending status
+    return NextResponse.json({ message: 'User creation initiated', username }, { status: 202 });
   } catch (error) {
     console.error('Error adding user:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
