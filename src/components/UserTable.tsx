@@ -358,25 +358,26 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.message === 'User already exists in the database') {
         setModalMessage('User already exists in the database');
         setModalMessageType("warning");
-        setIsLoading(false);
-      } else if (response.ok) {
+      } else {
         setModalMessage('User added successfully');
         setModalMessageType("success");
         mutate(); // Trigger a revalidation of the users data
-      } else {
-        throw new Error(data.message || 'Failed to submit account');
       }
     } catch (error) {
       console.error('Error submitting account:', error);
-      setErrorMessage(error instanceof Error ? error.message : "Failed to submit account. Please try again.");
-      setIsLoading(false);
+      setErrorMessage(error instanceof Error ? error.message : "An error occurred. Please try again.");
     } finally {
       setIsProcessing(false);
+      setIsLoading(false);
       // Close the modal after 3 seconds if it's still open
       setTimeout(() => {
         setIsSubmitModalVisible(false);
