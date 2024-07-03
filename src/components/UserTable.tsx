@@ -141,7 +141,7 @@ const UserTable: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
-  const [modalMessageType, setModalMessageType] = useState<"success" | "warning" | null>(null);
+  const [modalMessageType, setModalMessageType] = useState<"success" | "warning" | "info" | "error" | null>(null);
 
   // Handle auth and error messages
   useEffect(() => {
@@ -331,23 +331,10 @@ const UserTable: React.FC = () => {
   };
 
   const handleSubmitAccount = async () => {
-    if (!isValidUsername(twitterUsername)) {
-      setModalMessage("Username can only contain letters, numbers, and underscores.");
-      setModalMessageType("warning");
-      return;
-    }
-
     setIsProcessing(true);
-    setErrorMessage("");
-    setSuccessMessage("");
+    setIsLoading(true);
     setModalMessage("");
     setModalMessageType(null);
-    setIsLoading(true);
-
-    // Close the submit modal after 3 seconds
-    setTimeout(() => {
-      setIsSubmitModalVisible(false);
-    }, 3000);
 
     try {
       const response = await fetch('/api/users', {
@@ -358,27 +345,29 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
 
-      if (data.message === 'User already exists in the database') {
+      if (response.status === 200) {
         setModalMessage('User already exists in the database');
         setModalMessageType("warning");
-      } else {
+      } else if (response.status === 201) {
         setModalMessage('User added successfully');
         setModalMessageType("success");
         mutate(); // Trigger a revalidation of the users data
+      } else if (response.status === 202) {
+        setModalMessage('User creation initiated, but not yet completed. Please check back later.');
+        setModalMessageType("info");
+      } else {
+        throw new Error(data.message || 'Failed to submit account');
       }
     } catch (error) {
       console.error('Error submitting account:', error);
-      setErrorMessage(error instanceof Error ? error.message : "An error occurred. Please try again.");
+      setModalMessage(error instanceof Error ? error.message : "An error occurred. Please try again.");
+      setModalMessageType("error");
     } finally {
       setIsProcessing(false);
       setIsLoading(false);
-      // Close the modal after 3 seconds if it's still open
+      // Close the modal after 3 seconds
       setTimeout(() => {
         setIsSubmitModalVisible(false);
         setModalMessage("");
@@ -682,8 +671,12 @@ const UserTable: React.FC = () => {
               </div>
             )}
             {modalMessage && (
-              <div className={`mt-4 text-center ${modalMessageType === "warning" ? "text-yellow-500" : "text-green-500"}`}>
+              <div className={`mt-4 text-center ${modalMessageType === "warning" ? "text-yellow-500" : modalMessageType === "info" ? "text-blue-500" : modalMessageType === "error" ? "text-red-500" : "text-green-500"}`}>
                 {modalMessageType === "warning" ? (
+                  <ExclamationTriangleIcon className="inline-block w-5 h-5 mr-2" />
+                ) : modalMessageType === "info" ? (
+                  "ℹ️"
+                ) : modalMessageType === "error" ? (
                   <ExclamationTriangleIcon className="inline-block w-5 h-5 mr-2" />
                 ) : (
                   "✅"

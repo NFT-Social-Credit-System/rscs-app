@@ -2,14 +2,30 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '../../../utils/mongodb';
 import axios from 'axios';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const username = searchParams.get('username');
+
   try {
     const { db } = await connectToDatabase();
-    const users = await db.collection('Users').find({}).toArray();
-    return NextResponse.json(users);
+
+    if (username) {
+      // Handle single user fetch
+      const user = await db.collection('Users').findOne({ username: username.toLowerCase() });
+
+      if (user) {
+        return NextResponse.json({ message: 'User found', user }, { status: 200 });
+      } else {
+        return NextResponse.json({ message: 'User not found yet' }, { status: 202 });
+      }
+    } else {
+      // Handle all users fetch
+      const users = await db.collection('Users').find({}).toArray();
+      return NextResponse.json(users);
+    }
   } catch (error) {
-    console.error('Error fetching users:', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    console.error('Error fetching user(s):', error);
+    return NextResponse.json({ error: 'Failed to fetch user(s)' }, { status: 500 });
   }
 }
 
@@ -25,34 +41,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'User already exists in the database', user: existingUser }, { status: 200 });
     }
 
-    // If user doesn't exist, proceed with adding them
-    try {
-      console.log('Requesting scrape for:', username);
-      await axios.post('http://95.217.2.184:5000/scrape', {
-        username,
-        timestamp: new Date().getTime()
-      });
+    // If user doesn't exist, initiate the scrape process
+    console.log('Requesting scrape for:', username);
+    await axios.post('http://95.217.2.184:5000/scrape', {
+      username,
+      timestamp: new Date().getTime()
+    });
 
-      // Wait for the user to be added to the database
-      let newUser = null;
-      let attempts = 0;
-      while (!newUser && attempts < 10) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
-        attempts++;
-      }
-
-      if (newUser) {
-        return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
-      } else {
-        return NextResponse.json({ message: 'User creation pending', username }, { status: 202 });
-      }
-    } catch (error) {
-      console.error('Error calling external API:', error);
-      return NextResponse.json({ message: 'Error calling external API' }, { status: 500 });
+    // Poll the database for the new user
+    let newUser = null;
+    let attempts = 0;
+    while (!newUser && attempts < 10) {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between checks
+      newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
+      attempts++;
     }
+
+    if (newUser) {
+      return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
+    } else {
+      return NextResponse.json({ message: 'User creation initiated, but not yet completed', username }, { status: 202 });
+    }
+
   } catch (error) {
-    console.error('Error adding user:', error);
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+    console.error('Error initiating user addition:', error);
+    return NextResponse.json({ message: 'Error initiating user addition' }, { status: 500 });
   }
 }
