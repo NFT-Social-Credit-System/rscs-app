@@ -140,8 +140,10 @@ const UserTable: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
-  const [modalMessage, setModalMessage] = useState("");
-  const [modalMessageType, setModalMessageType] = useState<"success" | "warning" | "info" | "error" | null>(null);
+  const [isLoadingModalVisible, setIsLoadingModalVisible] = useState(false);
+  const [loadingModalMessage, setLoadingModalMessage] = useState("");
+  const [submitModalMessage, setSubmitModalMessage] = useState("");
+  const [isLoadingSuccess, setIsLoadingSuccess] = useState(false);
 
   // Handle auth and error messages
   useEffect(() => {
@@ -159,11 +161,11 @@ const UserTable: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to remove votes');
       }
-      
+
       await mutate();
     } catch (error) {
       console.error('Error removing votes:', error);
@@ -185,7 +187,7 @@ const UserTable: React.FC = () => {
           }
         }
       };
-  
+
       checkEligibility(); // Initial check
       const intervalId = setInterval(checkEligibility, 24 * 60 * 60 * 1000);
       return () => clearInterval(intervalId);
@@ -203,7 +205,7 @@ const UserTable: React.FC = () => {
 
   const parseFollowers = (followers: string): number => {
     if (typeof followers !== 'string') return 0;
-    
+
     const num = parseFloat(followers.replace(/,/g, ''));
     if (followers.endsWith('K')) {
       return num * 1000;
@@ -331,12 +333,26 @@ const UserTable: React.FC = () => {
   };
 
   const handleSubmitAccount = async () => {
+    if (!isValidUsername(twitterUsername)) {
+      setSubmitModalMessage("Username can only contain letters, numbers, and underscores.");
+      return;
+    }
+
     setIsProcessing(true);
-    setIsLoading(true);
-    setModalMessage("");
-    setModalMessageType(null);
+    setSubmitModalMessage("Processing...");
+    setIsSubmitModalVisible(true);
+
+    // Close the submit modal after 3 seconds
+    setTimeout(() => {
+      setIsSubmitModalVisible(false);
+      setSubmitModalMessage("");
+    }, 3000);
 
     try {
+      setIsLoadingModalVisible(true);
+      setLoadingModalMessage("Submitting account...");
+      setIsLoadingSuccess(false);
+
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
@@ -348,31 +364,35 @@ const UserTable: React.FC = () => {
       const data = await response.json();
 
       if (response.status === 200) {
-        setModalMessage('User already exists in the database');
-        setModalMessageType("warning");
+        setLoadingModalMessage('User already exists in the database');
+        setIsLoadingSuccess(false);
       } else if (response.status === 201) {
-        setModalMessage('User added successfully');
-        setModalMessageType("success");
+        setLoadingModalMessage('User added successfully');
+        setIsLoadingSuccess(true);
         mutate(); // Trigger a revalidation of the users data
       } else if (response.status === 202) {
-        setModalMessage('User creation initiated, but not yet completed. Please check back later.');
-        setModalMessageType("info");
+        setLoadingModalMessage('User creation initiated. Please check back later.');
+        setIsLoadingSuccess(false);
       } else {
         throw new Error(data.message || 'Failed to submit account');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error submitting account:', error);
-      setModalMessage(error instanceof Error ? error.message : "An error occurred. Please try again.");
-      setModalMessageType("error");
+      if (error instanceof Error) {
+        setLoadingModalMessage(error.message);
+      } else {
+        setLoadingModalMessage("An unexpected error occurred. The user submission may still be processing. Please check back later.");
+      }
+      setIsLoadingSuccess(false);
     } finally {
       setIsProcessing(false);
-      setIsLoading(false);
-      // Close the modal after 3 seconds
+      
+      // Keep the loading modal visible for 5 seconds after the process completes
       setTimeout(() => {
-        setIsSubmitModalVisible(false);
-        setModalMessage("");
-        setModalMessageType(null);
-      }, 3000);
+        setIsLoadingModalVisible(false);
+        setLoadingModalMessage("");
+        setIsLoadingSuccess(false);
+      }, 5000);
     }
   };
 
@@ -415,12 +435,12 @@ const UserTable: React.FC = () => {
         return;
       }
     }
-    
+
     if (!address) {
       console.error('No wallet address available');
       return;
     }
-  
+
     try {
       const newVotingWeight = await checkVotingEligibility(address);
       if (newVotingWeight !== votingWeight) {
@@ -429,22 +449,22 @@ const UserTable: React.FC = () => {
           await removeVotes(username);
         }
       }
-  
+
       const response = await fetch(`/api/users/${username}/wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address }),
       });
-      
+
       if (response.ok) {
         const { isMiladyOG } = await response.json();
         mutate(currentUsers =>
           Array.isArray(currentUsers)
-            ? currentUsers.map(user => 
-                user.username === username 
-                  ? { ...user, isMiladyOG, walletAddress: address }
-                  : user
-              )
+            ? currentUsers.map(user =>
+              user.username === username
+                ? { ...user, isMiladyOG, walletAddress: address }
+                : user
+            )
             : currentUsers,
           false
         );
@@ -638,13 +658,8 @@ const UserTable: React.FC = () => {
         </ModalContent>
       </Modal>
       <Modal
-        isOpen={isSubmitModalOpen && isSubmitModalVisible}
-        onClose={() => {
-          setIsSubmitModalOpen(false);
-          setIsSubmitModalVisible(false);
-          setModalMessage("");
-          setModalMessageType(null);
-        }}
+        isOpen={isSubmitModalVisible}
+        onClose={() => setIsSubmitModalVisible(false)}
         className="submit-account-modal"
       >
         <ModalContent>
@@ -656,42 +671,19 @@ const UserTable: React.FC = () => {
               <Input
                 placeholder="username"
                 value={twitterUsername}
-                onChange={(e) => {
-                  setTwitterUsername(e.target.value);
-                  setModalMessage("");
-                  setModalMessageType(null);
-                }}
+                onChange={(e) => setTwitterUsername(e.target.value)}
                 className="twitter-username-input h-10 ml-2"
               />
             </div>
-            {isProcessing && !modalMessage && (
-              <div className="flex items-center justify-center mt-4">
+            {submitModalMessage && (
+              <div className="mt-4 text-center">
                 <Spinner size="sm" />
-                <span className="ml-2">Processing...</span>
-              </div>
-            )}
-            {modalMessage && (
-              <div className={`mt-4 text-center ${modalMessageType === "warning" ? "text-yellow-500" : modalMessageType === "info" ? "text-blue-500" : modalMessageType === "error" ? "text-red-500" : "text-green-500"}`}>
-                {modalMessageType === "warning" ? (
-                  <ExclamationTriangleIcon className="inline-block w-5 h-5 mr-2" />
-                ) : modalMessageType === "info" ? (
-                  "ℹ️"
-                ) : modalMessageType === "error" ? (
-                  <ExclamationTriangleIcon className="inline-block w-5 h-5 mr-2" />
-                ) : (
-                  "✅"
-                )}
-                {modalMessage}
+                <span className="ml-2">{submitModalMessage}</span>
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="light" onPress={() => {
-              setIsSubmitModalOpen(false);
-              setIsSubmitModalVisible(false);
-              setModalMessage("");
-              setModalMessageType(null);
-            }}>
+            <Button color="danger" variant="light" onPress={() => setIsSubmitModalVisible(false)}>
               Cancel
             </Button>
             <Button color="primary" onPress={handleSubmitAccount} disabled={isProcessing || !twitterUsername}>
@@ -700,6 +692,9 @@ const UserTable: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      <LoadingModal isLoading={isLoadingModalVisible} message={loadingModalMessage} isSuccess={isLoadingSuccess} />
+
       <TwitterAuthModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -720,7 +715,6 @@ const UserTable: React.FC = () => {
           </div>
         )}
       </TwitterAuthModal>
-      <LoadingModal isLoading={isLoading} />
       {(errorMessage || successMessage) && (
         <div className="fixed bottom-4 left-4 bg-white shadow-md rounded-lg p-4">
           {errorMessage && <span className="text-red-500">❌ {errorMessage}</span>}
@@ -731,16 +725,21 @@ const UserTable: React.FC = () => {
   );
 };
 
-const LoadingModal: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
+const LoadingModal: React.FC<{ isLoading: boolean; message: string; isSuccess: boolean }> = ({ isLoading, message, isSuccess }) => {
   if (!isLoading) return null;
 
   return (
     <div className="fixed bottom-4 left-4 bg-white shadow-md rounded-lg p-4 flex items-center">
-      <Spinner size="sm" />
-      <span className="ml-2">Processing submission...</span>
+      {isSuccess ? (
+        <CheckBadgeIcon className="h-5 w-5 text-green-500 mr-2" />
+      ) : (
+        <Spinner size="sm" />
+      )}
+      <span className={`ml-2 ${isSuccess ? 'text-green-500' : ''}`}>{message}</span>
     </div>
   );
 };
 
 export default UserTable;
+
 

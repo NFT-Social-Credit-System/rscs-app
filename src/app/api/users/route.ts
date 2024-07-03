@@ -23,9 +23,10 @@ export async function GET(request: Request) {
       const users = await db.collection('Users').find({}).toArray();
       return NextResponse.json(users);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching user(s):', error);
-    return NextResponse.json({ error: 'Failed to fetch user(s)' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
 
@@ -63,8 +64,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'User creation initiated, but not yet completed', username }, { status: 202 });
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error initiating user addition:', error);
-    return NextResponse.json({ message: 'Error initiating user addition' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ message: 'Error initiating user addition', error: errorMessage }, { status: 500 });
   }
 }
