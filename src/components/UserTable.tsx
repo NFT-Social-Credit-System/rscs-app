@@ -133,7 +133,11 @@ const UserTable: React.FC = () => {
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
   const authError = searchParams.get('error');
-  const { data: users, error: fetchError, isLoading: isLoadingUsers, mutate } = useSWR<UserData[]>('/api/fetch', fetcher);
+  const { data: users, error: fetchError, isLoading: isLoadingUsers, mutate } = useSWR<UserData[]>('/api/users', fetcher, {
+    refreshInterval: 5000, // Poll every 5 seconds
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
@@ -361,8 +365,9 @@ const UserTable: React.FC = () => {
         setModalMessageType("warning");
         setIsLoading(false);
       } else if (response.ok) {
-        setIsSubmitModalVisible(false);
-        pollForUser();
+        setModalMessage('User added successfully');
+        setModalMessageType("success");
+        mutate(); // Trigger a revalidation of the users data
       } else {
         throw new Error(data.message || 'Failed to submit account');
       }
@@ -378,43 +383,6 @@ const UserTable: React.FC = () => {
         setModalMessage("");
         setModalMessageType(null);
       }, 3000);
-    }
-  };
-
-  const pollForUser = async () => {
-    try {
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username: twitterUsername }),
-      });
-
-      const data = await response.json();
-
-      if (response.status === 200 || response.status === 201) {
-        setIsLoading(false);
-        setSuccessMessage('User added successfully');
-        mutate(currentUsers =>
-          Array.isArray(currentUsers)
-            ? [...currentUsers, data.user]
-            : [data.user],
-          false
-        );
-        setTimeout(() => {
-          setSuccessMessage('');
-        }, 3000);
-      } else if (response.status === 202) {
-        // User addition is still pending, poll again after a delay
-        setTimeout(pollForUser, 2000);
-      } else {
-        throw new Error(data.message || 'Failed to add user');
-      }
-    } catch (error) {
-      console.error('Error polling for user:', error);
-      setIsLoading(false);
-      setErrorMessage(error instanceof Error ? error.message : 'An error occurred while adding the user');
     }
   };
 
