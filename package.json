@@ -4,9 +4,9 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "dev": "NODE_ENV=development next dev",
+    "dev": "cross-env NODE_ENV=development next dev",
     "build": "next build",
-    "start": "NODE_ENV=production next start",
+    "start": "cross-env NODE_ENV=production next start",
     "lint": "next lint"
   },
   "dependencies": {
@@ -40,6 +40,7 @@
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "cross-env": "^7.0.3",
     "eslint": "^8.0.0",
     "eslint-config-next": "14.2.4",
     "postcss": "^8.4.39",
