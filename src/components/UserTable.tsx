@@ -363,6 +363,10 @@ const UserTable: React.FC = () => {
 
       const data = await response.json();
 
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to submit account');
+      }
+
       if (response.status === 200) {
         setLoadingModalMessage('User already exists in the database');
         setIsLoadingSuccess(false);
@@ -373,15 +377,13 @@ const UserTable: React.FC = () => {
       } else if (response.status === 202) {
         setLoadingModalMessage('User creation initiated. Please check back later.');
         setIsLoadingSuccess(false);
-      } else {
-        throw new Error(data.message || 'Failed to submit account');
       }
     } catch (error: unknown) {
       console.error('Error submitting account:', error);
       if (error instanceof Error) {
         setLoadingModalMessage(error.message);
       } else {
-        setLoadingModalMessage("An unexpected error occurred. The user submission may still be processing. Please check back later.");
+        setLoadingModalMessage("An unexpected error occurred. Please try again.");
       }
       setIsLoadingSuccess(false);
     } finally {
@@ -392,6 +394,7 @@ const UserTable: React.FC = () => {
         setIsLoadingModalVisible(false);
         setLoadingModalMessage("");
         setIsLoadingSuccess(false);
+        setIsSubmitModalVisible(false);
       }, 5000);
     }
   };

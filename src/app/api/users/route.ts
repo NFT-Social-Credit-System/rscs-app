@@ -44,10 +44,13 @@ export async function POST(request: Request) {
 
     // If user doesn't exist, initiate the scrape process
     console.log('Requesting scrape for:', username);
-    await axios.post('http://95.217.2.184:5000/scrape', {
+    const response = await axios.post('http://95.217.2.184:5000/scrape', {
       username,
       timestamp: new Date().getTime()
     });
+
+    // Log the response from the scrape request
+    console.log('Scrape response:', response.data);
 
     // Poll the database for the new user
     let newUser = null;
@@ -65,7 +68,13 @@ export async function POST(request: Request) {
     }
 
   } catch (error: unknown) {
-    console.error('Error initiating user addition:', error);
+    console.error('Detailed error:', error);
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
+    if (axios.isAxiosError(error)) {
+      console.error('Axios error response:', error.response?.data);
+    }
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({ message: 'Error initiating user addition', error: errorMessage }, { status: 500 });
   }
