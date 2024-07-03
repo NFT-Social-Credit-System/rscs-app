@@ -32,28 +32,25 @@ export async function POST(request: Request) {
         username,
         timestamp: new Date().getTime()
       });
+
+      // Wait for the user to be added to the database
+      let newUser = null;
+      let attempts = 0;
+      while (!newUser && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
+        attempts++;
+      }
+
+      if (newUser) {
+        return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
+      } else {
+        return NextResponse.json({ message: 'User creation pending', username }, { status: 202 });
+      }
     } catch (error) {
       console.error('Error calling external API:', error);
       return NextResponse.json({ message: 'Error calling external API' }, { status: 500 });
     }
-
-    // Start polling for the user
-    let attempts = 0;
-    const maxAttempts = 15;
-    const pollInterval = 2000;
-
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
-      const newUser = await db.collection('Users').findOne({ username: username.toLowerCase() });
-      
-      if (newUser) {
-        return NextResponse.json({ message: 'User added successfully', user: newUser }, { status: 201 });
-      }
-      
-      attempts++;
-    }
-
-    return NextResponse.json({ message: 'User creation pending', username }, { status: 202 });
   } catch (error) {
     console.error('Error adding user:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });

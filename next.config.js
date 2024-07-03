@@ -59,6 +59,10 @@ const nextConfig = {
         source: '/api/users/:username/removeVotes',
         destination: '/api/users/:username/removeVotes/route',
       },
+      {
+        source: '/api/users',
+        destination: '/api/users/route',
+      },
     ];
   },
   experimental: {
