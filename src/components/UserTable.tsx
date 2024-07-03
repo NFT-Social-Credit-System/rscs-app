@@ -317,6 +317,7 @@ const UserTable: React.FC = () => {
     }
   };
 
+
   // Apply filter and close modal
   const applyFilter = () => {
     setIsFilterModalOpen(false);
@@ -361,10 +362,16 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('Error parsing JSON:', jsonError);
+        throw new Error('Invalid response from server');
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit account');
+        throw new Error(data.message || data.error || 'Failed to submit account');
       }
 
       if (response.status === 200) {
@@ -380,11 +387,7 @@ const UserTable: React.FC = () => {
       }
     } catch (error: unknown) {
       console.error('Error submitting account:', error);
-      if (error instanceof Error) {
-        setLoadingModalMessage(error.message);
-      } else {
-        setLoadingModalMessage("An unexpected error occurred. Please try again.");
-      }
+      setLoadingModalMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
       setIsLoadingSuccess(false);
     } finally {
       setIsProcessing(false);

@@ -52,6 +52,9 @@ export async function POST(request: Request) {
     // Log the response from the scrape request
     console.log('Scrape response:', response.data);
 
+    // Logs for API route 
+    console.log('Request body:', await request.text());
+
     // Poll the database for the new user
     let newUser = null;
     let attempts = 0;
@@ -69,13 +72,13 @@ export async function POST(request: Request) {
 
   } catch (error: unknown) {
     console.error('Detailed error:', error);
+    let errorMessage = 'An unknown error occurred';
     if (error instanceof Error) {
       console.error('Error stack:', error.stack);
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
     }
-    if (axios.isAxiosError(error)) {
-      console.error('Axios error response:', error.response?.data);
-    }
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({ message: 'Error initiating user addition', error: errorMessage }, { status: 500 });
   }
 }
