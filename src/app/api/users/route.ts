@@ -26,11 +26,16 @@ export async function POST(request: Request) {
     }
 
     // If user doesn't exist, proceed with adding them
-    console.log('Requesting scrape for:', username);
-    await axios.post('http://95.217.2.184:5000/scrape', {
-      username,
-      timestamp: new Date().getTime()
-    });
+    try {
+      console.log('Requesting scrape for:', username);
+      await axios.post('http://95.217.2.184:5000/scrape', {
+        username,
+        timestamp: new Date().getTime()
+      });
+    } catch (error) {
+      console.error('Error calling external API:', error);
+      return NextResponse.json({ message: 'Error calling external API' }, { status: 500 });
+    }
 
     // Start polling for the user
     let attempts = 0;

@@ -53,5 +53,11 @@
       "src": "node_modules/@rscs/rscs-backend/package.json",
       "use": "@vercel/node"
     }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
   ]
 }
