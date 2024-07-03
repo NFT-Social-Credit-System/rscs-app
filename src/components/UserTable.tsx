@@ -362,28 +362,16 @@ const UserTable: React.FC = () => {
         body: JSON.stringify({ username: twitterUsername }),
       });
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        console.error('Error parsing JSON:', jsonError);
-        throw new Error('Invalid response from server');
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Failed to submit account');
-      }
+      const data = await response.json();
 
       if (response.status === 200) {
         setLoadingModalMessage('User already exists in the database');
         setIsLoadingSuccess(false);
-      } else if (response.status === 201) {
-        setLoadingModalMessage('User added successfully');
-        setIsLoadingSuccess(true);
-        mutate(); // Trigger a revalidation of the users data
       } else if (response.status === 202) {
         setLoadingModalMessage('User creation initiated. Please check back later.');
-        setIsLoadingSuccess(false);
+        setIsLoadingSuccess(true);
+      } else {
+        throw new Error(data.message || 'Failed to submit account');
       }
     } catch (error: unknown) {
       console.error('Error submitting account:', error);
