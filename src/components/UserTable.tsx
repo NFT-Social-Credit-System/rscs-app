@@ -270,53 +270,53 @@ const UserTable: React.FC = () => {
   // Check if there are no users after filtering
   const noUsersAvailable = sortedUsers.length === 0;
 
-  // Handle thumbs up action
-  const handleThumbsUp = async (username: string) => {
+  // Handle vote action
+  const handleVote = async (username: string, isUpvote: boolean) => {
+    if (!address || votingWeight === 0) {
+      console.log('User is not eligible to vote');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/users/${username}/upvote`, { method: 'POST' });
+      const response = await fetch(`/api/users/${username}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          isUpvote, 
+          weight: votingWeight,
+          voter: address 
+        }),
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to upvote');
+        throw new Error('Failed to vote');
       }
-      const updatedUser = await response.json();
+
+      const { user: updatedUser } = await response.json();
+      
+      // Update the local state with the new user data
       mutate(currentUsers =>
         Array.isArray(currentUsers)
           ? currentUsers.map(user => user.username === username ? updatedUser : user)
           : currentUsers,
         false
       );
+
+      console.log(`Vote recorded: ${isUpvote ? 'up' : 'down'} vote with weight ${votingWeight}`);
     } catch (error) {
-      console.error('Error upvoting:', error);
+      console.error('Error voting:', error);
     }
+  };
+
+  // Handle thumbs up action
+  const handleThumbsUp = async (username: string) => {
+    handleVote(username, true);
   };
 
   // Handle thumbs down action
   const handleThumbsDown = async (username: string) => {
     handleVote(username, false);
   };
-
-  // Handle vote action
-  const handleVote = async (username: string, isUpvote: boolean) => {
-    if (!address || votingWeight === 0) return;
-
-    try {
-      const response = await fetch(`/api/users/${username}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isUpvote, weight: votingWeight }),
-      });
-      if (!response.ok) throw new Error('Failed to vote');
-      const { user: updatedUser } = await response.json();
-      mutate(currentUsers =>
-        Array.isArray(currentUsers)
-          ? currentUsers.map(user => user.username === username ? updatedUser : user)
-          : currentUsers,
-        false
-      );
-    } catch (error) {
-      console.error('Error voting:', error);
-    }
-  };
-
 
   // Apply filter and close modal
   const applyFilter = () => {
