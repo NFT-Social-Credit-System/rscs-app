@@ -1,17 +1,9 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import connectToDatabase from '../../../../utils/mongodb';
+import { NextRequest, NextResponse } from 'next/server';
+import connectToDatabase from '@/utils/mongodb';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  const { username } = req.query;
-  const { walletAddress } = req.body;
-
-  if (!username || !walletAddress) {
-    return res.status(400).json({ message: 'Missing username or wallet address' });
-  }
+export async function POST(request: NextRequest, { params }: { params: { username: string } }) {
+  const { username } = params;
+  const { walletAddress } = await request.json();
 
   try {
     const { db } = await connectToDatabase();
@@ -27,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     if (!result) {
-      return res.status(404).json({ message: 'User not found' });
+      return NextResponse.json({ message: 'User not found' }, { status: 404 });
     }
 
     // Recalculate the score
@@ -41,9 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { returnDocument: 'after' }
     );
 
-    res.status(200).json(updatedUser || { message: 'User updated but not returned' });
+    return NextResponse.json(updatedUser || { message: 'User updated but not returned' });
   } catch (error) {
     console.error('Error removing votes:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }

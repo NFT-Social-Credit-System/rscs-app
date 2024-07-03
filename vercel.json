@@ -1,45 +1,63 @@
 {
+  "name": "rscs",
+  "version": 2,
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "cleanUrls": true,
+  "installCommand": "pnpm install && git clone https://github.com/Remilia-Social-Credit-System/rscs-backend.git node_modules/@rscs/rscs-backend && cd node_modules/@rscs/rscs-backend && npm install",
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "images": {
+    "sizes": [256, 640, 1080],
+    "remotePatterns": [
+      {
+        "protocol": "https",
+        "hostname": "pbs.twimg.com"
+      }
+    ],
+    "minimumCacheTTL": 300,
+    "formats": ["image/webp"],
+    "dangerouslyAllowSVG": false,
+    "contentSecurityPolicy": "default-src 'self'; script-src 'none'; sandbox;"
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ],
   "builds": [
     {
-      "src": "src/app/api/auth/callback/route.ts",
-      "use": "@vercel/node"
+      "src": "package.json",
+      "use": "@vercel/next"
     },
     {
-      "src": "src/app/api/auth/initiate/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/auth/verify/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/check-voting/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/claim-account/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/fetch/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/users/[userId]/vote/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/users/route.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/users/[username]/checkMiladyOG.ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/app/api/users/[username]/removeVotes.ts",
+      "src": "node_modules/@rscs/rscs-backend/package.json",
       "use": "@vercel/node"
     }
   ],
-  "installCommand": "npm install --legacy-peer-deps"
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
 }

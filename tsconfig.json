@@ -22,12 +22,12 @@
     ],
     "baseUrl": ".",
     "paths": {
+      "@rscs-backend/*": [
+        "node_modules/@rscs/rscs-backend/*"
+      ],
       "@/*": [
         "./src/*"
       ],
-      "@rscs-backend/*": [
-        "../rscs-backend/*"
-      ]
     },
     "typeRoots": [
       "./node_modules/@types",

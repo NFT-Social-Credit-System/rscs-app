@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Button } from '@nextui-org/react';
+import Image from 'next/image';
 
 interface TwitterAuthModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ const TwitterAuthModal: React.FC<TwitterAuthModalProps> = ({ isOpen, onClose, on
         <ModalHeader className="flex flex-col gap-1">Claim Account</ModalHeader>
         <ModalBody>
           <div className="flex flex-col items-center justify-center">
-            <img src="/x.png" alt="Twitter Logo" className="w-16 h-16 mb-4" />
+            <Image src="/x.png" alt="Twitter Logo" width={30} height={24} />
             <Button 
               onClick={onAuthenticate}
               color="primary"
