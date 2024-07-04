@@ -1,37 +1,42 @@
 "use client";
 
 import '@rainbow-me/rainbowkit/styles.css';
-import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { WagmiConfig, createConfig, http } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { WagmiProvider, http, createConfig } from 'wagmi'
+import { RainbowKitProvider, getDefaultConfig , getDefaultWallets } from '@rainbow-me/rainbowkit'
 import { mainnet } from 'wagmi/chains';
 import { NextUIProvider } from '@nextui-org/react';
+import { useRouter } from 'next/navigation'
 
+const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
 
-// Setup default config for RainbowKit
-const { connectors } = getDefaultConfig({
+if (!projectId) {
+  throw new Error('NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID is not defined');
+}
+
+const config = getDefaultConfig({
   appName: 'RSCS',
-  projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID!,
+  projectId,
   chains: [mainnet],
   transports: {
     [mainnet.id]: http(),
   },
-});
+})
 
-const wagmiConfig = createConfig({
-  chains: [mainnet],
-  transports: {
-    [mainnet.id]: http(),
-  },
-});
+const queryClient = new QueryClient()
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
   return (
-    <WagmiConfig config={wagmiConfig}>
-      <RainbowKitProvider>
-        <NextUIProvider>
-          {children}
-        </NextUIProvider>
-      </RainbowKitProvider>
-    </WagmiConfig>
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider>
+          <NextUIProvider navigate={router.push}>
+            {children}
+          </NextUIProvider>
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

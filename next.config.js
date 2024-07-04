@@ -44,10 +44,6 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/:path*',
-        destination: 'http://95.217.2.184:5000/:path*',
-      },
-      {
         source: '/callback',
         destination: '/api/auth/callback',
       },
@@ -62,6 +58,10 @@ const nextConfig = {
       {
         source: '/api/users',
         destination: '/api/users/route',
+      },
+      {
+        source: '/api/users/:username/vote',
+        destination: '/api/users/:username/vote/route',
       },
     ];
   },
