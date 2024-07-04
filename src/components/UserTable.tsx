@@ -25,11 +25,12 @@ import {
 import UserStatusBadge from "./UserStatusBadge";
 import { CheckBadgeIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 import TwitterAuthModal from './TwitterAuthModal';
+import { useWalletVoting } from './useWalletVoting';
 import { useSearchParams } from 'next/navigation';
-import { useAccount, useConnect } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useAccount, useConnect, useSignMessage, Connector } from 'wagmi';
 import { checkVotingEligibility } from '../lib/checkBalance';
 import useSWR from 'swr';
+import { injected } from "@wagmi/core";
 
 // Define UserData interface here instead of importing from InitialUserData
 interface UserData {
@@ -127,9 +128,8 @@ const UserTable: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [votingWeight, setVotingWeight] = useState<number>(0);
-  const { address, isConnected } = useAccount();
   const { connect } = useConnect();
+  const { signMessageAsync } = useSignMessage();
   const searchParams = useSearchParams();
   const auth = searchParams.get('auth');
   const authError = searchParams.get('error');
@@ -144,6 +144,8 @@ const UserTable: React.FC = () => {
   const [loadingModalMessage, setLoadingModalMessage] = useState("");
   const [submitModalMessage, setSubmitModalMessage] = useState("");
   const [isLoadingSuccess, setIsLoadingSuccess] = useState(false);
+  const { eligible, votingWeight, checkEligibility } = useWalletVoting();
+  const { address, isConnected } = useAccount();
 
   // Handle auth and error messages
   useEffect(() => {
@@ -173,26 +175,14 @@ const UserTable: React.FC = () => {
   }, [address, mutate]);
 
   useEffect(() => {
-    if (address) {
-      const checkEligibility = async () => {
-        const newVotingWeight = await checkVotingEligibility(address);
-        if (newVotingWeight !== votingWeight) {
-          setVotingWeight(newVotingWeight);
-          if (newVotingWeight === 0) {
-            // Remove votes for all users
-            const usernames = users?.map(user => user.username) || [];
-            for (const username of usernames) {
-              await removeVotes(username);
-            }
-          }
-        }
-      };
-
-      checkEligibility(); // Initial check
-      const intervalId = setInterval(checkEligibility, 24 * 60 * 60 * 1000);
-      return () => clearInterval(intervalId);
+    if (address && votingWeight === 0) {
+      // Remove votes for all users
+      const usernames = users?.map(user => user.username) || [];
+      for (const username of usernames) {
+        removeVotes(username);
+      }
     }
-  }, [address, votingWeight, users, removeVotes]);
+  }, [address, votingWeight, users, removeVotes, isConnected]);
 
   // Filter users based on search input
   const filteredUsers = Array.isArray(users)
@@ -270,31 +260,51 @@ const UserTable: React.FC = () => {
   // Check if there are no users after filtering
   const noUsersAvailable = sortedUsers.length === 0;
 
-  // Handle vote action
+  // handle vote
   const handleVote = async (username: string, isUpvote: boolean) => {
-    if (!address || votingWeight === 0) {
+    console.log('handleVote called', { username, isUpvote, address, votingWeight, isConnected, eligible });
+
+    if (!isConnected) {
+      console.log('User is not connected');
+      setErrorMessage("Please connect your wallet to vote.");
+      return;
+    }
+
+    if (!eligible) {
       console.log('User is not eligible to vote');
+      setErrorMessage("You are not eligible to vote. Please check your wallet for Remilia Eco NFTs.");
+      return;
+    }
+
+    if (votingWeight === 0 || votingWeight === null) {
+      console.log('User has no voting weight');
+      setErrorMessage("Your voting weight is 0. You need Remilia Eco NFTs to vote.");
       return;
     }
 
     try {
+      console.log('Sending vote request');
       const response = await fetch(`/api/users/${username}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          isUpvote, 
+        body: JSON.stringify({
+          isUpvote,
           weight: votingWeight,
-          voter: address 
+          voter: address
         }),
       });
 
+      console.log('Vote response', response);
+
       if (!response.ok) {
-        throw new Error('Failed to vote');
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        throw new Error(errorData.error || 'Failed to vote');
       }
 
       const { user: updatedUser } = await response.json();
-      
-      // Update the local state with the new user data
+      console.log('Updated user', updatedUser);
+
       mutate(currentUsers =>
         Array.isArray(currentUsers)
           ? currentUsers.map(user => user.username === username ? updatedUser : user)
@@ -303,19 +313,23 @@ const UserTable: React.FC = () => {
       );
 
       console.log(`Vote recorded: ${isUpvote ? 'up' : 'down'} vote with weight ${votingWeight}`);
+      setSuccessMessage(`Vote recorded: ${isUpvote ? 'up' : 'down'} vote with weight ${votingWeight}`);
     } catch (error) {
       console.error('Error voting:', error);
+      setErrorMessage("Failed to record vote. Please try again.");
     }
   };
 
   // Handle thumbs up action
   const handleThumbsUp = async (username: string) => {
-    handleVote(username, true);
+    console.log('handleThumbsUp called', username);
+    await handleVote(username, true);
   };
 
   // Handle thumbs down action
   const handleThumbsDown = async (username: string) => {
-    handleVote(username, false);
+    console.log('handleThumbsDown called', username);
+    await handleVote(username, false);
   };
 
   // Apply filter and close modal
@@ -379,7 +393,7 @@ const UserTable: React.FC = () => {
       setIsLoadingSuccess(false);
     } finally {
       setIsProcessing(false);
-      
+
       // Keep the loading modal visible for 5 seconds after the process completes
       setTimeout(() => {
         setIsLoadingModalVisible(false);
@@ -423,33 +437,34 @@ const UserTable: React.FC = () => {
   const handleWalletChange = async (username: string) => {
     if (!isConnected) {
       try {
-        await connect({ connector: injected() });
+        connect({
+          connector: injected(), // Assuming the first connector is the one you want to use
+        });
       } catch (error) {
         console.error('Error connecting wallet:', error);
         return;
       }
     }
-
+  
     if (!address) {
       console.error('No wallet address available');
       return;
     }
-
+  
     try {
       const newVotingWeight = await checkVotingEligibility(address);
       if (newVotingWeight !== votingWeight) {
-        setVotingWeight(newVotingWeight);
         if (newVotingWeight === 0) {
           await removeVotes(username);
         }
       }
-
+  
       const response = await fetch(`/api/users/${username}/wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address }),
       });
-
+  
       if (response.ok) {
         const { isMiladyOG } = await response.json();
         mutate(currentUsers =>
@@ -475,6 +490,14 @@ const UserTable: React.FC = () => {
       console.log('Raw user data:', JSON.stringify(users, null, 2));
     }
   }, [users]);
+
+useEffect(() => {
+  console.log('UserTable: Connection status changed', { isConnected, address, eligible, votingWeight });
+  if (isConnected && address) {
+    checkEligibility();
+  }
+}, [isConnected, address, eligible, votingWeight, checkEligibility]);
+
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
@@ -735,5 +758,4 @@ const LoadingModal: React.FC<{ isLoading: boolean; message: string; isSuccess: b
 };
 
 export default UserTable;
-
 

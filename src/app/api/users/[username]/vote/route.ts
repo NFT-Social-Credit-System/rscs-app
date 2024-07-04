@@ -1,21 +1,23 @@
 import { NextResponse } from 'next/server';
 import connectToDatabase from '@/utils/mongodb';
-const TwitterUser = require('@rscs-backend/backend/models/TwitterUserData');
 
 export async function POST(
   request: Request,
   { params }: { params: { username: string } }
 ) {
+  console.log('Vote API called', { params });
   try {
     console.log('Connecting to database...');
-    await connectToDatabase();
+    const { client, db } = await connectToDatabase();
     console.log('Connected to database');
     
     const { username } = params;
     const { isUpvote, weight, voter } = await request.json();
+    console.log('Vote data received', { username, isUpvote, weight, voter });
     
-    const user = await TwitterUser.findOne({ username });
+    const user = await db.collection('Users').findOne({ username });
     if (!user) {
+      console.log('User not found', { username });
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
@@ -36,7 +38,11 @@ export async function POST(
     user.score.down = user.votes.filter((vote: any) => vote.voteType === 'down')
       .reduce((sum: number, vote: any) => sum + vote.weight, 0);
     
-    await user.save();
+    console.log('Saving updated user', { username, newScore: user.score });
+    await db.collection('Users').updateOne(
+      { username },
+      { $set: { votes: user.votes, score: user.score } }
+    );
     
     return NextResponse.json({ success: true, user });
   } catch (error) {

@@ -27,7 +27,16 @@ async function connectToDatabase(): Promise<{ client: MongoClient, db: Db }> {
   }
 
   if (!cached.promise) {
-    cached.promise = MongoClient.connect(MONGODB_URI as string).then((client) => {
+    cached.promise = MongoClient.connect(MONGODB_URI as string).then(async (client) => {
+      const db = client.db('RSCS');
+      const collection = db.collection('Users');
+
+      // Update existing documents to include score and votes fields
+      await collection.updateMany(
+        { score: { $exists: false } },
+        { $set: { score: { up: 0, down: 0 }, votes: [] } }
+      );
+
       return client;
     });
   }

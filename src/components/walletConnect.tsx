@@ -1,55 +1,21 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useSignMessage } from 'wagmi';
+import { useWalletVoting } from './useWalletVoting';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid';
+import { useAccount } from 'wagmi';
 
 /**
  * @author Ozzy(@Zerocousin) for Remilia Social Credit System
  */
 
 const WalletConnect: React.FC = () => {
-  const { address, isConnected } = useAccount();
-  const { signMessage } = useSignMessage();
-  const [votingWeight, setVotingWeight] = useState<number | null>(null);
-  const [eligible, setEligible] = useState<boolean | null>(null);
-  const [isSigned, setIsSigned] = useState(false);
-  const [signatureError, setSignatureError] = useState<string | null>(null);
-
-  const checkEligibility = useCallback(async () => {
-    if (!address) return;
-    try {
-      const response = await fetch(`/api/check-voting?address=${address}`); 
-      const data = await response.json();
-      setEligible(data.eligible);
-      setVotingWeight(data.votingWeight);
-      if (!data.eligible) {
-        setSignatureError("You can't vote without Remilia Eco NFTs - please visit our Docs");
-      }
-    } catch (error) {
-      console.error('Error checking voting eligibility:', error);
-    }
-  }, [address]);
-
-  const handleSign = useCallback(() => {
-    if (!address) return;
-    try {
-      const message = "Sign this message to verify your wallet ownership";
-      signMessage({ message });
-      setIsSigned(true);
-      checkEligibility();
-    } catch (error) {
-      console.error('Error signing message:', error);
-      setSignatureError('Signature failed');
-    }
-  }, [address, signMessage, checkEligibility]);
+  const { votingWeight, eligible, isSigned, signatureError, isConnected } = useWalletVoting();
 
   useEffect(() => {
-    if (isConnected && !isSigned) {
-      handleSign();
-    }
-  }, [isConnected, isSigned, handleSign]);
+    console.log('WalletConnect: Connection status changed', { isConnected, isSigned, eligible });
+  }, [isConnected, isSigned, eligible]);
 
   return (
     <div className="relative w-full">

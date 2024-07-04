@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 
 interface TwitterUser {
+  _id?: ObjectId;
   username: string;
   name: string;
   profilePictureUrl?: string;
